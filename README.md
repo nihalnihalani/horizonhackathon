@@ -2,7 +2,7 @@
 
 A trip-planning agent that survives `kill -9` after a booking desk commits but before the agent records the receipt. It restarts with zero local state, restores from RawTree, reconciles the orphan booking by `action_key` (no duplicate ferry), notices that the park's status page changed while it was dead (Nimble), has a local Liquid model supersede the stale fact, repairs only the campsite step (Site C, accessible, instead of closed Site A or inaccessible Site B), and a code validator stamps the verdict. A naive "transcript resume" arm runs the same fixture beside it.
 
-Design docs: [AGENTS.md](AGENTS.md), [docs/FINAL_PROJECT.md](docs/FINAL_PROJECT.md), [docs/implementation/](docs/implementation/) (CONTRACTS, THREE_HOUR_CUT, VALIDATION_AND_DEMO, WORKLOG).
+Design docs: [AGENTS.md](AGENTS.md), [docs/FINAL_PROJECT.md](docs/FINAL_PROJECT.md), [docs/implementation/](docs/implementation/) (CONTRACTS, VALIDATION_AND_DEMO, WORKLOG).
 
 ## Run it
 

@@ -1,4 +1,4 @@
-// /status.html DOM contract + Nimble parser (THREE_HOUR_CUT §5). FROZEN at scaffold.
+// /status.html DOM contract + Nimble parser. FROZEN at scaffold.
 // WP A (desk) renders with renderStatusPage(); WP C (providers) sends NIMBLE_STATUS_PARSER and
 // maps with parseStatusFields(). They agree through this file only.
 import { SITE_IDS, type SiteId } from "./fixture-f3.ts";

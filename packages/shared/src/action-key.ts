@@ -1,6 +1,6 @@
 // Stable business-intent identity. FROZEN at scaffold.
 // actionKey never includes retry number, timestamp, PID or epoch (CONTRACTS §2).
-// NOTE: THREE_HOUR_CUT §5 specifies sha256 (an older task text said sha1; sha256 is used).
+// NOTE: action keys use sha256 (an older task text said sha1).
 import { createHash } from "node:crypto";
 
 /** Canonical JSON: sorted keys, no whitespace, undefined fields omitted, null kept. */

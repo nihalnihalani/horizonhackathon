@@ -1,4 +1,4 @@
-// Fixture F3 (THREE_HOUR_CUT §4, CONTRACTS §9 prices in cents). FROZEN at scaffold.
+// Fixture F3 (CONTRACTS §9, prices in cents). FROZEN at scaffold.
 // Source of truth: packages/shared/fixtures/f3.json. Validated on import.
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
