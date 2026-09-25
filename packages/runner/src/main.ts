@@ -6,7 +6,7 @@
 import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 import {
-  CrashPoint, F3, REPO_ROOT, decodeValue, loadConfig, resourceById,
+  CrashPoint, F3, REPO_ROOT, decodeValue, encodeValue, loadConfig, resourceById,
   type FactRow, type Projection, type Slot,
 } from "@dr/shared";
 import {
@@ -15,6 +15,7 @@ import {
 import {
   applyContextOps, compareOpRow, constraintsFromProjection, contextOpRows, createProviders, factsFromObservation,
   renderWorkingContext, siteMap, spentCents, type CandidateX, type EvidenceItem, type NimbleObservation, type PlannerContext,
+  REAL_SOURCES, realFingerprint, summarizeReal, type RealFacts,
 } from "@dr/providers";
 import { emptyProjection } from "@dr/storage";
 import { HttpProjectionLoader, HttpRowSink, emit, exitAfterFlush, httpClaimDispatch, httpIntentGate } from "./io.ts";
@@ -108,6 +109,51 @@ async function terminal(j: Journal) {
   emit("verdict", { ...v });
 }
 
+// ---------------------------------------------------------------- real web (read-only)
+// The real Angel Island pages, read through Nimble next to the simulated status page. Parsed in code; stored
+// as volatile facts so recovery marks them stale and the next epoch re-checks them. A fetch failure never
+// blocks the run: the real sites are context, the simulated desk remains the authority on bookings.
+async function readRealWorld(j: Journal, mode: "first" | "recheck") {
+  const results = await Promise.all(REAL_SOURCES.map(async (src) => {
+    try {
+      const page = await prov.sensor.extractPage(src.url);
+      return { ok: true as const, src, page, facts: src.parse(page.markdown, F3.trip.start_date) as RealFacts };
+    } catch (e) { return { ok: false as const, src, error: (e as Error).message }; }
+  }));
+  for (const r of results) {
+    const key = `real.${r.src.id}`;
+    if (!r.ok) {
+      log(`REAL ${r.src.label}: unreachable (${r.error}); continuing without it`);
+      emit("real_source", { mode, id: r.src.id, label: r.src.label, title: r.src.title, url: r.src.url, ok: false, error: r.error });
+      continue;
+    }
+    const old = j.state.facts[key];
+    const before = old ? (decodeValue(old.value) as RealFacts) : null;
+    const changed = !!before && realFingerprint(before) !== realFingerprint(r.facts);
+    const summary = summarizeReal(r.facts);
+    if (old && changed) await j.append("facts", { ...factBody(old), status: "superseded", superseded_by: r.page.task_id, excerpt: `superseded: real page changed (task ${r.page.task_id})` });
+    await j.append("facts", {
+      key, value: encodeValue(r.facts), source_url: r.src.url, observed_at: new Date().toISOString(), valid_until: null,
+      volatile: true, trust: "extract", status: "active", superseded_by: null, excerpt: summary, nimble_request_id: r.page.task_id, world_version: null,
+    });
+    log(`REAL ${r.src.label} (${mode}) via Nimble task ${r.page.task_id} · ${r.page.nimble_ms} ms · ${before ? (changed ? "CHANGED" : "unchanged") : "first read"} · ${summary}`);
+    emit("real_source", {
+      mode, id: r.src.id, label: r.src.label, title: r.src.title, url: r.src.url, ok: true, task_id: r.page.task_id, nimble_ms: r.page.nimble_ms,
+      summary, changed, first: !before, before: before ? summarizeReal(before) : null,
+    });
+  }
+}
+
+/** Code gate on the real ferry schedule: block if the operator runs no ferry on the trip date. */
+function realFerryGate(j: Journal): { ok: boolean; reason: string } {
+  const f = j.state.facts["real.ferry"];
+  if (!f || f.status === "superseded") return { ok: true, reason: "real ferry schedule unavailable; not verified (simulated desk decides)" };
+  const d = decodeValue(f.value) as RealFacts;
+  if (d.kind !== "ferry" || d.service === null) return { ok: true, reason: "real ferry schedule has no entry for the trip date; not verified" };
+  if (!d.service) return { ok: false, reason: `real_schedule: no Tiburon ferry service on ${d.weekday} ${d.date} (${f.source_url})` };
+  return { ok: true, reason: `real schedule confirms service on ${d.weekday} ${d.date}: ${d.departures.join(", ")}` };
+}
+
 // ---------------------------------------------------------------- DR arm
 async function runDr(): Promise<"done" | "stopped"> {
   const rec = await recover({ loader, sink, desk, run_id: runId, arm, sim_clock: simClock, log });
@@ -115,6 +161,9 @@ async function runDr(): Promise<"done" | "stopped"> {
   emit("recovered", { epoch: rec.epoch, restored_rows: rec.restored_rows, reconciled: rec.reconciled, stale: rec.stale, blocked: rec.blocked_steps, pid: process.pid });
   const init = await ensureInitialization(j, observe);
   if (!init.ok) log(`OBSERVE failed at initialization (${init.reason}); source-dependent steps will block, others continue`);
+  // Real web via Nimble: first read on first boot, re-check after every restart (unreachable pages never throw).
+  const seenReal = Object.keys(j.state.facts).some((k) => k.startsWith("real."));
+  await readRealWorld(j, seenReal ? "recheck" : "first");
   let epochObs: NimbleObservation | null = null;
   let evicted: string[] = [];
 
@@ -200,6 +249,12 @@ async function runDr(): Promise<"done" | "stopped"> {
         log(`LIQUID context_ops (${prop.proposed_by}): evict [${applied.accepted.join(", ") || "none"}]${applied.rejected.length ? ` rejected [${applied.rejected.map((x) => `${x.id}: ${x.reason}`).join("; ")}]` : ""} · items ${applied.before.length}→${applied.after.length} · tokens ${rendered.tokens.count}→${applied.rendered.tokens.count}`);
         emit("context_ops", { step: id, proposed_by: prop.proposed_by, accepted: applied.accepted, rejected: applied.rejected, items_before: applied.before.length, items_after: applied.after.length, tokens_before: rendered.tokens.count, tokens_after: applied.rendered.tokens.count });
       }
+    }
+    if (ps.slot === "ferry") {
+      const g = realFerryGate(j);
+      log(`REAL ferry gate: ${g.ok ? "ok" : "BLOCK"} · ${g.reason}`);
+      emit("real_gate", { step: id, ok: g.ok, reason: g.reason });
+      if (!g.ok) { await blockStep(j, id, g.reason); continue; }
     }
     let cands: CandidateX[];
     if (ps.slot === "campsite") {

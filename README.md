@@ -2,7 +2,7 @@
 
 **A long-horizon trip agent that survives `kill -9` after a payment has already gone through, and still finishes the job correctly.**
 
-Built for the **Long Horizon Agents Hack**. Long-running agents fail because history piles up: stale observations, repeated actions, ever-growing prompts. Dead Reckoning addresses this with the hackathon's three ideas:
+Built at the **Long Horizon Agents Hack** (tokens&, AWS Builder Loft, San Francisco, 25 Sep 2026). Long-running agents fail because history piles up: stale observations, repeated actions, ever-growing prompts. Dead Reckoning addresses this with the hackathon's three ideas:
 
 | Theme | How Dead Reckoning does it |
 |---|---|
@@ -20,7 +20,7 @@ Mission: Angel Island, 2 people, $400, **wheelchair-accessible campsite required
 4. **Resume.** A new process restores from **RawTree** and looks up the original booking key at the desk. It recovers the **same receipt** (no second payment) and re-reads the page. **Liquid** supersedes "Site A open", and the **OpenAI** planner repairs only the campsite: Site C, because Site B isn't accessible.
 5. **Verdict.** A deterministic validator stamps **VALID ($280)**. The baseline agent, which resumes from its transcript, tries the closed site, gets rejected by the desk, and ends BLOCKED.
 
-The scorecard comes from the booking desk's own ledger, not from the agents. The booking desk and park page are **simulated**. The crash, persistence and provider calls are **real**.
+The scorecard comes from the booking desk's own ledger, not from the agents. The booking desk and the campsite closure are **simulated**, so the dramatic moment happens on cue. The crash, persistence and provider calls are **real**. Nimble also reads two **real** pages: the [Angel Island–Tiburon ferry schedule](https://angelislandferry.com/schedule) and the [Angel Island State Park notices](https://www.parks.ca.gov/?page_id=468). Code checks that a ferry actually runs on the trip date before booking, and re-reads both pages after the crash.
 
 ## Architecture
 
@@ -47,7 +47,8 @@ flowchart LR
   end
 
   Desk[("Simulated booking desk<br/>idempotent ledger · SQLite")]
-  Feed["Public status page<br/>(tunnelled, read-only)"]
+  Feed["Simulated park status page<br/>(tunnelled, read-only)"]
+  Real["Real web<br/>angelislandferry.com · parks.ca.gov"]
 
   Chat -- "signed run identity" --> Actor
   Screen -- "authenticated proxy" --> Actor
@@ -55,7 +56,9 @@ flowchart LR
   Actor <-- "acked + visible events" --> RT
   Sup -- "spawn / kill -9" --> Runner
   Runner -- "typed transitions, claims" --> Actor
-  Runner --> NB --> Feed
+  Runner --> NB
+  NB --> Feed
+  NB --> Real
   Runner --> LQ
   Runner --> OA
   Runner -- "book / lookup by action key" --> Desk
@@ -68,8 +71,8 @@ flowchart LR
 
 | Sponsor | Role in Dead Reckoning | Where |
 |---|---|---|
-| **RawTree (Tinybird)** | The agent's only durable memory. Typed `mission_events` with contiguous revisions, `mission_checkpoints`, and query-visibility checks before any effect. Restore rejects gaps and conflicting duplicates. Metrics feed the live scorecard. | `packages/storage`, `packages/control/src/actor.ts` |
-| **Nimble** | Re-reads the live park status page after the outage (`/v2/extract` with server-side parsing), so decisions use fresh evidence. A failed fetch blocks the step; it never counts as "closed". | `packages/providers/src/nimble.ts` |
+| **RawTree (Tinybird)** | The agent's only durable memory. Typed `mission_events` with contiguous revisions, `mission_checkpoints`, and query-visibility checks before any effect. Restore rejects gaps and conflicting duplicates. Metrics feed the live scorecard, and `scripts/demo-queries.sh` shows the raw SQL. | `packages/storage`, `packages/control/src/actor.ts` |
+| **Nimble** | The agent's eyes on the web (`/v2/extract` with server-side parsing). It re-reads the park status page after the outage, and the real ferry schedule and park notices, so decisions use fresh evidence. A failed fetch blocks the step; it never counts as "closed". | `packages/providers/src/nimble.ts` |
 | **Liquid AI** | A local LFM2.5-1.2B on llama-server. It decides whether a new observation supersedes an old fact and proposes context evictions (schema-constrained). Code validates every proposal. | `packages/providers/src/curator.ts` |
 | **OpenAI** | The Responses API planner: one structured decision per step, `store:false`, input bounded to 6,000 tokens and built from state, never from a transcript. | `packages/providers/src/planner.ts` |
 | **CopilotKit** | The OpenBot console (AG-UI remote agent, Intelligence threads). It verifies the signed run identity and hosts the mission screen. | `apps/console` |

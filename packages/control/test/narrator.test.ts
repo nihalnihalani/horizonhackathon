@@ -72,3 +72,24 @@ describe("scorecard", () => {
     expect(scorecard([{ ...results[0]!, ledger: null }])).toContain("| Ferry tickets paid (desk ledger) | ? |");
   });
 });
+
+describe("real web narration", () => {
+  it("narrates first reads, re-checks, and the ferry gate", () => {
+    const n = new Narrator();
+    expect(n.line(ev("dr", { kind: "real_source", mode: "first", ok: true, label: "angelislandferry.com", title: "Angel Island–Tiburon Ferry schedule", nimble_ms: 1800, summary: "Fri Oct 9: ferry runs" })))
+      .toBe("🔵 **Dead Reckoning** 🌐 Real web via Nimble: **angelislandferry.com** (Angel Island–Tiburon Ferry schedule, 1.8 s): Fri Oct 9: ferry runs.");
+    expect(n.line(ev("dr", { kind: "real_source", mode: "recheck", ok: true, first: false, changed: false, label: "parks.ca.gov", nimble_ms: 900, summary: "3 current notices" })))
+      .toContain("after the outage: unchanged (3 current notices)");
+    expect(n.line(ev("dr", { kind: "real_source", mode: "recheck", ok: true, first: false, changed: true, label: "parks.ca.gov", nimble_ms: 900, summary: "1 notice: closed", before: "no current notices" })))
+      .toContain("**changed**. Now: 1 notice: closed. Before: no current notices.");
+    expect(n.line(ev("dr", { kind: "real_gate", ok: false, reason: "real_schedule: no Tiburon ferry service on Monday 2026-10-05" })))
+      .toBe("🔵 **Dead Reckoning** ⛔ Ferry not booked: real_schedule: no Tiburon ferry service on Monday 2026-10-05.");
+  });
+  it("adds a scorecard row for real re-checks", () => {
+    const md = scorecard([
+      { arm: "dr", run_id: "a", verdict: null, ledger: [], tokens: [], realChecks: { checked: 2, changed: 0, labels: ["angelislandferry.com", "parks.ca.gov"] } },
+      { arm: "naive", run_id: "b", verdict: null, ledger: [], tokens: [] },
+    ]);
+    expect(md).toContain("| Real websites re-checked after restart | 2 (angelislandferry.com, parks.ca.gov): unchanged | none |");
+  });
+});
