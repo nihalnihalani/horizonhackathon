@@ -1,2 +1,3 @@
-// @dr/runner — owned by its work package (see docs/implementation/THREE_HOUR_CUT.md). Replace freely.
-export {};
+// @dr/runner — the mission loop (src/main.ts is the child entrypoint spawned by control).
+export * from "./io.ts";
+export * from "./validator.ts";
