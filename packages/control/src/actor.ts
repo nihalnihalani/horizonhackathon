@@ -8,16 +8,17 @@ import { createInterface } from "node:readline";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  AckError, F3, HOLD_LINE_PREFIX, REPO_ROOT, TRANSITIONS, assertRunId, buildRunnerEnv, canTransition, encodeSse, eventTypeForRow,
+  ACTIVE_STATUSES, AckError, F3, HOLD_LINE_PREFIX, REPO_ROOT, TRANSITIONS, assertRunId, buildRunnerEnv, canTransition, encodeSse, eventTypeForRow,
   isTableName, makeEvent, newRunId, parseRow,
   type Arm, type CanonicalEventSink, type CommandKind, type ConfigOf, type CrashPoint, type DeskClient, type EventType,
-  type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
+  type FactRow, type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
 } from "@dr/shared";
 import {
   RawTreeClient, RawTreeEventLog, RawTreeLoader, RawTreeSink, applyEvent, applyRow, emptyProjection, restoreFromEvents, totalRows,
   waitForRow, writeCheckpoint,
 } from "@dr/storage";
 import { HttpDeskClient } from "@dr/kernel/desk-client";
+import { ApprovalError, assertApprovalCovers, decideApproval, proposeApproval, type Approval, type ApprovalBinding } from "@dr/task-kernel";
 import {
   commandArgsHash, decideArmCrash, decideCancel, decideClaim, decideCommand, decidePause, decideResume, isRefusal,
   newMissionMeta, statusPath, toApiError, unresolvedClaims, type CommandInput, type Refusal,
@@ -45,6 +46,18 @@ export type Mission = {
   meta: MissionMeta;
   updatedAt: string;
   reconciling: boolean;
+  /** CONTRACTS §3: "auto" = creation authorizes fixture bookings within constraints; "per_action" = each claim needs an approval */
+  review: "auto" | "per_action";
+  /** by approvalId (deterministic from the binding hash); persisted as APPROVAL_REQUESTED / APPROVAL_DECIDED events */
+  approvals: Map<string, Approval>;
+  /** every facts row this control process wrote for the mission (bounded), for evidence lookup by id/version */
+  factRows: FactRow[];
+};
+
+export type EvidenceView = {
+  evidenceId: string; missionId: string; kind: "fact" | "observation";
+  provenance: { sourceUrl: string | null; taskId: string | null; retrievalMode: "live" | "direct" | null; observedAt: string; worldVersion: number | null; status: string };
+  excerpt: string; truncated: boolean;
 };
 
 /** HTTP-shaped command result; duplicates return the stored one verbatim (D02). */
@@ -84,6 +97,7 @@ export class MissionActor {
   private tokens = new Map<string, { run_id: string; arm: Arm }>();
   private createCommands = new Map<string, { argsHash: string; result: CommandResult }>();
   private rawtreeOk = true;
+  private deskProbe: { ok: boolean; at: number } = { ok: true, at: 0 };
   readonly cache = new Map<string, Projection>();
   /** Event-derived projection per mission (applyEvent over every acked event); source of checkpoints. */
   private canon = new Map<string, Projection>();
@@ -158,11 +172,12 @@ export class MissionActor {
     }
   }
 
-  private async setStatus(m: Mission, to: MissionStatus, reason: string | null, o: { force?: boolean; commandId?: string } = {}): Promise<void> {
+  private async setStatus(m: Mission, to: MissionStatus, reason: string | null, o: { childExited?: boolean; commandId?: string } = {}): Promise<void> {
     const from = m.meta.status;
     if (from === to) return;
-    if (!o.force && !canTransition(from, to)) throw new Error(`INVALID_TRANSITION ${from} → ${to}`);
-    await this.appendEvent(m, STATUS_EVENT[to] ?? "MISSION_STATUS_CHANGED", { from, to, reason }, o.commandId);
+    if (!canTransition(from, to, { childExited: o.childExited })) throw new Error(`INVALID_TRANSITION ${from} → ${to}`);
+    // `status`/`blockedReason` are the fields the storage reducer (applyEvent) restores from
+    await this.appendEvent(m, STATUS_EVENT[to] ?? "MISSION_STATUS_CHANGED", { from, to, status: to, reason, ...(to === "blocked" ? { blockedReason: reason } : {}) }, o.commandId);
     m.meta.status = to;
     if (to === "blocked") m.meta.blockedReason = reason;
     else if (to === "queued") m.meta.blockedReason = null;
@@ -212,6 +227,7 @@ export class MissionActor {
     applyRow(p, table as TableName, parsed as never);
     this.cache.set(who.run_id, p);
     this.publish(table === "metrics" ? "metric" : "row", parsed, { table: table as TableName, run_id: who.run_id, arm: who.arm });
+    if (m && table === "facts") { m.factRows.push(parsed as unknown as FactRow); if (m.factRows.length > 500) m.factRows.shift(); }
     if (m && table === "commitments") await this.onCommitment(m, parsed);
     return { inserted: 1 as const, rev };
   }
@@ -288,7 +304,7 @@ export class MissionActor {
       arm: o.arm, run_id, generation: 0, pid: null, state: "created", token: "", statusUrl: o.statusUrl,
       transcriptPath: resolve(REPO_ROOT, `artifacts/naive/${run_id}.json`), holdLine: null, lastExit: null, verdict: null, child: null,
       exited: Promise.resolve(), meta: newMissionMeta({ missionId: run_id, ownerId: o.ownerId, batchId: o.batchId ?? run_id, goal: o.goal }),
-      updatedAt: new Date().toISOString(), reconciling: false,
+      updatedAt: new Date().toISOString(), reconciling: false, review: "auto", approvals: new Map(), factRows: [],
     };
     this.byId.set(run_id, m);
     this.missions[o.arm] = m;
@@ -308,16 +324,18 @@ export class MissionActor {
   }
 
   /** POST /missions: `created`, no child, no effect (arm a crash before the first Resume). */
-  createMission(o: { commandId: string; ownerId: string; goal: string; arm?: Arm; statusUrl?: string; batchId?: string; args?: Record<string, unknown> }): Promise<CommandResult> {
+  createMission(o: { commandId: string; ownerId: string; goal: string; arm?: Arm; statusUrl?: string; batchId?: string; review?: "auto" | "per_action"; args?: Record<string, unknown> }): Promise<CommandResult> {
     return this.enqueue(async () => {
-      const cmd: CommandInput = { commandId: o.commandId, kind: "create", args: { goal: o.goal, arm: o.arm ?? "dr", owner: o.ownerId, batchId: o.batchId ?? null, ...(o.args ?? {}) } };
+      const review = o.review ?? "auto";
+      const cmd: CommandInput = { commandId: o.commandId, kind: "create", args: { goal: o.goal, arm: o.arm ?? "dr", owner: o.ownerId, batchId: o.batchId ?? null, review, ...(o.args ?? {}) } };
       const hash = commandArgsHash(cmd);
       const prior = this.createCommands.get(o.commandId);
       if (prior) return prior.argsHash === hash ? prior.result : this.refuse({ code: "COMMAND_CONFLICT", status: 409, message: `commandId ${o.commandId} was already used with different arguments` });
       const statusUrl = o.statusUrl ?? String(await (this.opts.statusUrl?.() ?? "http://127.0.0.1:4402/status.html"));
       const m = this.newMission({ arm: o.arm ?? "dr", ownerId: o.ownerId, goal: o.goal, statusUrl, batchId: o.batchId });
-      await this.appendEvent(m, "MISSION_CREATED", { missionId: m.run_id, ownerId: o.ownerId, goal: o.goal, batchId: m.meta.batchId, arm: m.arm }, o.commandId);
-      const result = await this.recordCommand(m, cmd, hash, { status: "created" }, 201);
+      m.review = review;
+      await this.appendEvent(m, "MISSION_CREATED", { missionId: m.run_id, ownerId: o.ownerId, goal: o.goal, batchId: m.meta.batchId, arm: m.arm, review }, o.commandId);
+      const result = await this.recordCommand(m, cmd, hash, { status: "created", review }, 201);
       this.createCommands.set(o.commandId, { argsHash: hash, result });
       return result;
     });
@@ -336,7 +354,7 @@ export class MissionActor {
       if (c.kind === "resume") {
         const r = decideResume(m.meta, this.childActive(m));
         if (isRefusal(r)) return this.refuse(r, m);
-        await this.setStatus(m, "queued", "explicit resume", { force: true, commandId: c.commandId });
+        await this.setStatus(m, "queued", "explicit resume", { childExited: !this.childActive(m), commandId: c.commandId });
         const res = await this.recordCommand(m, cmd, hash, { status: "queued", generation: m.generation + 1 }, 202);
         await this.spawnGeneration(m, { simClock: typeof c.args?.simClock === "string" ? c.args.simClock : m.generation === 0 ? F3.sim_clock : SIM_CLOCK_RESUME });
         return res;
@@ -365,6 +383,10 @@ export class MissionActor {
     return this.enqueue(async () => {
       const m = this.byId.get(who.run_id);
       if (!m) return this.refuse({ code: "NOT_FOUND", status: 404, message: "unknown mission" });
+      if (m.review === "per_action" && !m.meta.claims[req.actionKey]) {
+        const gate = await this.reviewGate(m, req);
+        if (gate) return gate;
+      }
       const d = decideClaim(m.meta, {
         ...req, generation: req.epoch, currentGeneration: m.generation, commitments: this.cache.get(m.run_id)?.commitments,
       }, this.revision(m.run_id) + 1);
@@ -375,10 +397,134 @@ export class MissionActor {
       if (d.kind === "grant") {
         await this.appendEvent(m, "DISPATCH_CLAIMED", { ...d.claim });
         m.meta.claims[req.actionKey] = d.claim;
-        this.log(`dispatch claim GRANTED ${d.claim.dispatchId} for ${req.actionKey.slice(0, 12)}… slot ${req.slot}`, m.arm, m.run_id);
+        this.log(`dispatch claim GRANTED ${d.claim.dispatchId} for ${req.actionKey.slice(0, 12)}… slot ${req.slot}${m.arm === "naive" ? " (naive arm: attempt-derived key)" : ""}`, m.arm, m.run_id);
+        await this.advanceNow(m, "executing");
       }
       return { http: 200, body: { granted: true, dispatchId: d.claim.dispatchId } };
     });
+  }
+
+  // ---------------------------------------------------------------- per-action review (U04/U06, invariant 17)
+  private bindingFor(m: Mission, req: { actionKey: string; argsHash: string; slot: string }): ApprovalBinding | null {
+    const c = this.cache.get(m.run_id)?.commitments[req.actionKey];
+    if (!c || c.args_hash !== req.argsHash) return null;
+    return {
+      missionId: m.run_id, ownerId: m.meta.ownerId, planRevision: m.meta.planRevision, actionKey: req.actionKey, slot: req.slot,
+      operation: c.kind, resourceId: c.resource, argsHash: req.argsHash,
+    };
+  }
+
+  /** In the queue: refuse the claim until an accepted, unexpired approval binds exactly this commitment. */
+  private async reviewGate(m: Mission, req: { actionKey: string; argsHash: string; slot: string }): Promise<CommandResult | null> {
+    const b = this.bindingFor(m, req);
+    if (!b) return this.refuse({ code: "INTENT_MISSING", status: 409, message: "no recorded intent with these arguments; nothing to review" }, m);
+    const now = Date.now();
+    const proposal = proposeApproval(b, { now, display: `${b.operation} ${b.resourceId} for slot ${b.slot} (plan rev ${b.planRevision})` });
+    const existing = m.approvals.get(proposal.approvalId);
+    if (existing?.status === "accepted") {
+      try {
+        assertApprovalCovers(existing, b, now);
+        if (m.meta.status === "waiting_approval") await this.setStatus(m, "executing", `approval ${existing.approvalId} accepted`);
+        return null;
+      } catch (e) {
+        return this.refuse({ code: (e as ApprovalError).code ?? "APPROVAL_CHANGED", status: 409, message: (e as Error).message }, m);
+      }
+    }
+    if (existing?.status === "rejected") return this.refuse({ code: "APPROVAL_REJECTED", status: 409, message: `approval ${existing.approvalId} was rejected` }, m);
+    let a = existing;
+    if (!a || (a.status === "awaiting_review" && Date.parse(a.expiresAt) <= now) || a.status === "expired") {
+      a = proposal;
+      m.approvals.set(a.approvalId, a);
+      await this.appendEvent(m, "APPROVAL_REQUESTED", { approval: a });
+      this.log(`approval requested ${a.approvalId}: ${a.display}`, m.arm, m.run_id);
+    }
+    await this.advanceNow(m, "waiting_approval");
+    return { http: 409, body: { ...toApiError({ code: "WAITING_APPROVAL", status: 409, message: `waiting for approval ${a.approvalId}` }, { missionId: m.run_id, currentRevision: this.revision(m.run_id) }), approvalId: a.approvalId } };
+  }
+
+  listApprovals(missionId: string): Approval[] { return [...(this.byId.get(missionId)?.approvals.values() ?? [])]; }
+
+  /** POST /missions/:id/approvals/:approvalId. Deduplicated by commandId like every mutation. */
+  decideApproval(missionId: string, approvalId: string, actorId: string, d: { commandId: string; decision: "accept" | "reject"; displayedBindingHash: string; expectedPlanRevision: number }): Promise<CommandResult> {
+    return this.enqueue(async () => {
+      const m = this.byId.get(missionId);
+      if (!m) return this.refuse({ code: "NOT_FOUND", status: 404, message: "unknown mission" });
+      const cmd: CommandInput = { commandId: d.commandId, kind: "approve", missionId, args: { approvalId, actorId, decision: d.decision, displayedBindingHash: d.displayedBindingHash, expectedPlanRevision: d.expectedPlanRevision } };
+      const hash = commandArgsHash(cmd);
+      const dc = decideCommand(m.meta, cmd, hash, this.revision(missionId));
+      if (dc.kind === "duplicate") return dc.result as CommandResult;
+      if (dc.kind !== "accept") return this.refuse(dc.refusal, m);
+      const a = m.approvals.get(approvalId);
+      if (!a) return this.refuse({ code: "NOT_FOUND", status: 404, message: `unknown approval ${approvalId}` }, m);
+      let next: Approval;
+      try {
+        next = decideApproval(a, { actorId, displayedBindingHash: d.displayedBindingHash, expectedPlanRevision: d.expectedPlanRevision, currentPlanRevision: m.meta.planRevision, decision: d.decision, commandId: d.commandId, now: Date.now() });
+      } catch (e) {
+        const code = (e as ApprovalError).code ?? "APPROVAL_CHANGED";
+        if (code === "APPROVAL_EXPIRED" && a.status === "awaiting_review") {
+          m.approvals.set(approvalId, { ...a, status: "expired" });
+          await this.appendEvent(m, "APPROVAL_DECIDED", { approvalId, status: "expired", commandId: d.commandId });
+        }
+        return this.refuse({ code, status: code === "APPROVAL_FORBIDDEN" ? 403 : 409, message: (e as Error).message }, m);
+      }
+      m.approvals.set(approvalId, next);
+      await this.appendEvent(m, "APPROVAL_DECIDED", { approvalId, status: next.status, decidedBy: actorId, bindingHash: next.bindingHash, commandId: d.commandId }, d.commandId);
+      this.log(`approval ${approvalId} ${next.status} by ${actorId}`, m.arm, m.run_id);
+      return this.recordCommand(m, cmd, hash, { approvalId, status: next.status }, 200);
+    });
+  }
+
+  // ---------------------------------------------------------------- finer status (from runner progress, via TRANSITIONS)
+  private async advanceNow(m: Mission, to: MissionStatus): Promise<void> {
+    if (!ACTIVE_STATUSES.includes(m.meta.status) || m.meta.status === to) return;
+    if (!statusPath(m.meta.status, to, TRANSITIONS)) return;
+    await this.moveTo(m, to, null);
+  }
+  private advance(m: Mission, to: MissionStatus): void {
+    void this.enqueue(() => this.advanceNow(m, to)).catch((e) => this.log(`status ${to}: ${(e as Error).message}`, m.arm, m.run_id));
+  }
+
+  // ---------------------------------------------------------------- evidence (bounded, provenance only; no URL fetch)
+  evidence(missionId: string, evidenceId: string, maxChars = 1000): EvidenceView | null {
+    const m = this.byId.get(missionId);
+    if (!m) return null;
+    const cap = Math.max(1, Math.min(2000, maxChars));
+    const fact = evidenceId.match(/^fact:([A-Za-z0-9._-]{1,64})@v?(\d{1,9})$/);
+    const obs = evidenceId.match(/^obs:([A-Za-z0-9._:-]{1,128})$/);
+    const mode = (t: string | null | undefined) => (t ? (t.startsWith("direct-") ? "direct" as const : "live" as const) : null);
+    const cut = (t: string) => ({ excerpt: t.length > cap ? t.slice(0, cap) : t, truncated: t.length > cap });
+    if (fact) {
+      const [, key, v] = fact;
+      const rows = m.factRows.filter((f) => f.key === key && (f.world_version ?? 0) === Number(v));
+      const f = rows.find((x) => x.status === "active") ?? rows.at(-1);
+      if (!f) return null;
+      return {
+        evidenceId, missionId, kind: "fact",
+        provenance: { sourceUrl: f.source_url ?? null, taskId: f.nimble_request_id ?? null, retrievalMode: mode(f.nimble_request_id), observedAt: f.observed_at, worldVersion: f.world_version ?? null, status: rows.at(-1)!.status },
+        ...cut(`${key} = ${f.value}${rows.at(-1)!.excerpt ? ` · ${rows.at(-1)!.excerpt}` : ""}`),
+      };
+    }
+    if (obs) {
+      const rows = m.factRows.filter((f) => f.nimble_request_id === obs[1]);
+      if (!rows.length) return null;
+      const latest = new Map(rows.map((r) => [r.key, r]));
+      const f = rows[0]!;
+      return {
+        evidenceId, missionId, kind: "observation",
+        provenance: { sourceUrl: f.source_url ?? null, taskId: obs[1]!, retrievalMode: mode(obs[1]), observedAt: f.observed_at, worldVersion: f.world_version ?? null, status: "recorded" },
+        ...cut([...latest.values()].map((r) => `${r.key} = ${r.value}`).join("\n")),
+      };
+    }
+    return null;
+  }
+
+  /** Cheap desk liveness probe for the snapshot (short timeout, cached 2 s). */
+  async probeDesk(): Promise<boolean> {
+    if (Date.now() - this.deskProbe.at < 2000) return this.deskProbe.ok;
+    let ok = false;
+    try { ok = (await fetch(`${this.cfg.DR_WORLD_BASE_URL.replace(/\/$/, "")}/health`, { signal: AbortSignal.timeout(800) })).ok; } catch { ok = false; }
+    this.deskProbe = { ok, at: Date.now() };
+    return ok;
   }
 
   /**
@@ -515,6 +661,9 @@ export class MissionActor {
     if (line.startsWith("@@DR ")) {
       try {
         const ev = JSON.parse(line.slice(5)) as { kind: string } & Record<string, unknown>;
+        if (ev.kind === "recovered") this.advance(m, "revalidating");
+        else if (ev.kind === "planner") this.advance(m, "planning");
+        else if (ev.kind === "context_ops") this.advance(m, "curating");
         if (ev.kind === "verdict") m.verdict = { verdict: String(ev.verdict), reason: String(ev.reason), duplicate_effects: Number(ev.duplicate_effects), stale_actions: Number(ev.stale_actions) };
         this.publish("worker", { ...ev, pid: m.pid, epoch: m.generation }, { run_id: m.run_id, arm: m.arm });
       } catch { this.log(line, m.arm, m.run_id); }
@@ -564,7 +713,7 @@ export class MissionActor {
       missionId, revision: this.revision(missionId), updatedAt: m.updatedAt, status: m.meta.status,
       reconciliationStatus: m.meta.reconciliationStatus, blockedReason: m.meta.blockedReason, arm: m.arm, epoch: m.generation,
       worker: { pid: this.childActive(m) ? m.pid : null, state: m.state, generation: m.generation, lastExit: m.lastExit },
-      availability: { rawtree: this.rawtreeOk ? "ok" : "unavailable", desk: "ok", ...(this.rawtreeOk ? {} : { lastKnown: true }) },
+      availability: { rawtree: this.rawtreeOk ? "ok" : "unavailable", desk: this.deskProbe.ok ? "ok" : "unavailable", ...(this.rawtreeOk ? {} : { lastKnown: true }) },
       constraints: Object.values(p.constraints).map((c) => ({ key: c.key, value: c.value })),
       plan: Object.values(p.plan_steps).map((s) => ({ stepId: s.step_id, slot: s.slot, resource: s.resource ?? null, status: s.status, reason: s.reason ?? null })),
       commitments: Object.values(p.commitments).map((c) => ({ actionKey: c.action_key, slot: c.slot, resource: c.resource, status: c.status, receiptId: c.receipt_id ?? null })),

@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
-import { REPO_ROOT, actionKey, type ConfigOf, type CrashPoint } from "@dr/shared";
+import { REPO_ROOT, actionKey, canTransition, type ConfigOf, type CrashPoint, type MissionStatus } from "@dr/shared";
 import { FakeRawTree } from "@dr/storage";
 import { startDesk, type RunningDesk } from "@dr/desk";
 import { f3FerryStep } from "@dr/kernel";
@@ -193,5 +193,79 @@ describe("R08: parent loses ownership/watermark metadata", () => {
     expect(g.status).toBe(404);
     expect(b.actor.byId.size).toBe(0);
     expect(desk.store.ledger({ run_id: id }).requests).toHaveLength(1);
+  });
+});
+
+/** Every status event in the log is an allowed hop (finer status never skips the transition table). */
+function assertStatusChain(events: MemoryEventLog, id: string) {
+  const hops = events.list(id).filter((e) => typeof e.payload.to === "string" && e.payload.from !== e.payload.to)
+    .map((e) => [e.payload.from, e.payload.to] as [MissionStatus, MissionStatus]);
+  for (const [from, to] of hops) expect(canTransition(from, to, { childExited: to === "queued" }), `${from} → ${to}`).toBe(true);
+  return hops.map(([, to]) => to);
+}
+
+describe("finer status + per-action review (U04, U06) through HTTP", () => {
+  it("claim refused WAITING_APPROVAL until an accepted approval binds exactly this commitment; then exactly one effect", async () => {
+    const { actor, events, url } = await control();
+    const c = await actor.createMission({ commandId: cid("create"), ownerId: "user-1", goal: "F3", review: "per_action" });
+    const id = String(c.body.missionId);
+    const m = () => actor.byId.get(id)!;
+    const f = f3FerryStep();
+    const key = actionKey(id, f.step_id, f.resource, f.date, f.party);
+    const h = (actorId = "user-1") => ({ authorization: `Bearer ${I}`, "x-dr-actor-id": actorId, "content-type": "application/json" });
+    const post = async (path: string, body: unknown, actorId?: string) => {
+      const r = await fetch(`${url}${path}`, { method: "POST", headers: h(actorId), body: JSON.stringify(body) });
+      return { status: r.status, body: (await r.json()) as Record<string, unknown> };
+    };
+    process.env.DR_HOLD_MS = "1";
+    await resume(actor, id);
+    await waitFor(() => m().generation === 1 && !actor.childActive(m()), 20_000, "generation 1 exit");
+    expect(m().meta.status).toBe("waiting_approval");
+    expect(desk.store.ledger({ run_id: id }).requests).toHaveLength(0);
+    const list = await (await fetch(`${url}/missions/${id}/approvals`, { headers: h() })).json() as { approvals: { approvalId: string; bindingHash: string; actionKey: string; status: string; planRevision: number }[] };
+    expect(list.approvals).toHaveLength(1);
+    const ap = list.approvals[0]!;
+    expect(ap).toMatchObject({ actionKey: key, status: "awaiting_review", planRevision: 0 });
+    const path = `/missions/${id}/approvals/${ap.approvalId}`;
+    // U04: stale/replayed card → no action
+    expect((await post(path, { commandId: cid("ap"), decision: "accept", displayedBindingHash: "0".repeat(64), expectedPlanRevision: 0 })).body.code).toBe("APPROVAL_CHANGED");
+    expect((await post(path, { commandId: cid("ap"), decision: "accept", displayedBindingHash: ap.bindingHash, expectedPlanRevision: 1 })).body.code).toBe("REVISION_CONFLICT");
+    expect((await post(path, { commandId: cid("ap"), decision: "accept", displayedBindingHash: ap.bindingHash, expectedPlanRevision: 0 }, "user-2")).status).toBe(403);
+    expect(events.list(id).filter((e) => e.type === "APPROVAL_DECIDED")).toHaveLength(0);
+    const acceptId = cid("ap");
+    const ok = await post(path, { commandId: acceptId, decision: "accept", displayedBindingHash: ap.bindingHash, expectedPlanRevision: 0 });
+    expect(ok).toMatchObject({ status: 200, body: { status: "accepted", approvalId: ap.approvalId } });
+    expect(await post(path, { commandId: acceptId, decision: "accept", displayedBindingHash: ap.bindingHash, expectedPlanRevision: 0 })).toEqual(ok);
+    expect((await post(path, { commandId: cid("ap"), decision: "reject", displayedBindingHash: ap.bindingHash, expectedPlanRevision: 0 })).body.code).toBe("APPROVAL_CHANGED");
+    // U06: the accepted approval does not cover another action key/slot with otherwise identical args
+    const intent = events.list(id).find((e) => e.type === "INTENT_RECORDED")!.payload.row as Record<string, unknown>;
+    const otherKey = "e".repeat(64);
+    await actor.appendRow({ run_id: id, arm: "dr" }, "commitments", { ...intent, action_key: otherKey, slot: "permit", resource: "permit", rev: 0 });
+    const replay = await actor.claimDispatch({ run_id: id, arm: "dr" }, { actionKey: otherKey, argsHash: String(intent.args_hash), slot: "permit", epoch: 1 });
+    expect(replay.http).toBe(409);
+    expect(replay.body.code).toBe("WAITING_APPROVAL");
+    expect(replay.body.approvalId).not.toBe(ap.approvalId);
+    expect(events.list(id).some((e) => e.type === "DISPATCH_CLAIMED")).toBe(false);
+    // explicit Resume: restore/reconcile, same key/args, now covered → one effect
+    await resume(actor, id);
+    await waitFor(() => m().generation === 2 && !actor.childActive(m()), 20_000, "generation 2 exit");
+    const l = desk.store.ledger({ run_id: id });
+    expect(l.requests).toHaveLength(1);
+    expect(l.outcomes).toMatchObject([{ action_key: key, committed: true }]);
+    const chain = assertStatusChain(events, id);
+    expect(chain).toContain("waiting_approval");
+    expect(chain).toContain("executing");
+  });
+
+  it("claim-driven executing status walks the table (restoring → … → executing), never skipping", async () => {
+    const { actor, events } = await control();
+    const { id, m } = await prepared(actor, null, 1);
+    await resume(actor, id);
+    await waitFor(() => m().generation === 1 && !actor.childActive(m()), 20_000, "exit");
+    expect(assertStatusChain(events, id)).toEqual(["queued", "restoring", "reconciling", "revalidating", "planning", "executing"]);
+    const snap = actor.missionSnapshot(id)!;
+    expect(snap.status).toBe("executing");
+    await actor.probeDesk();
+    expect(actor.missionSnapshot(id)!.availability.desk).toBe("ok");
   });
 });

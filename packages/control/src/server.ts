@@ -63,6 +63,11 @@ const CreateBody = z.object({
   arm: z.enum(["dr", "naive"]).default("dr"),
   batchId: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/).optional(),
   statusUrl: z.string().url().optional(),
+  review: z.enum(["auto", "per_action"]).optional(),
+}).strict();
+const ApprovalBody = z.object({
+  commandId: CommandId, decision: z.enum(["accept", "reject"]), displayedBindingHash: z.string().regex(/^[a-f0-9]{64}$/),
+  expectedPlanRevision: z.number().int().nonnegative(),
 }).strict();
 const MutationBody = z.object({ commandId: CommandId, expectedRevision: z.number().int().nonnegative() }).strict();
 const ArmCrashBody = z.object({ commandId: CommandId, point: CrashPoint, expectedRevision: z.number().int().nonnegative().optional() }).strict();
@@ -98,7 +103,10 @@ export type ControlDeps = { actor: MissionActor; cfg: ConfigOf<"control">; ops: 
 export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
   const agUi = createAgUiHandler(createMissionPort(actor, ops));
 
-  /** Mission REST caller: OpenBot (internal token + trusted x-dr-actor-id) or the local operator (admin). */
+  /**
+   * Mission REST caller: OpenBot (internal token + trusted x-dr-actor-id) or the local operator (admin).
+   * Operator-as-admin is accepted for the single-user MVP only (lead disposition, wave 2); approvals still require the owner.
+   */
   function caller(req: IncomingMessage): { ownerId: string; admin: boolean } | null {
     const tok = bearer(req);
     if (tok && tok === cfg.DR_INTERNAL_TOKEN) {
@@ -161,8 +169,45 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
       if (!who) return apiError(res, 401, { code: "UNAUTHORIZED", message: "internal token with x-dr-actor-id, or operator token, required", retryable: false });
       const b = parse(CreateBody, await body(req));
       try {
-        return send(res, await actor.createMission({ commandId: b.commandId, ownerId: who.ownerId, goal: b.goal, arm: b.arm as Arm, batchId: b.batchId, statusUrl: b.statusUrl }));
+        return send(res, await actor.createMission({ commandId: b.commandId, ownerId: who.ownerId, goal: b.goal, arm: b.arm as Arm, batchId: b.batchId, statusUrl: b.statusUrl, review: b.review }));
       } catch (e) { return apiError(res, 503, { code: "STORAGE_UNAVAILABLE", message: (e as Error).message, retryable: true }); }
+    }
+    const sub = p.match(/^\/missions\/([A-Za-z0-9._-]{1,64})\/(approvals|evidence|events)(?:\/([^/]{1,200}))?$/);
+    if (sub) {
+      const [, id, kind, rawArg] = sub as unknown as [string, string, "approvals" | "evidence" | "events", string | undefined];
+      let arg: string | undefined;
+      try { arg = rawArg === undefined ? undefined : decodeURIComponent(rawArg); } catch { throw new BadRequest("malformed path"); }
+      const who = caller(req);
+      if (!who) return apiError(res, 401, { code: "UNAUTHORIZED", message: "internal token with x-dr-actor-id, or operator token, required", retryable: false, missionId: id });
+      const mission = actor.byId.get(id);
+      if (!mission) return unknownMission(res, id);
+      if (!who.admin && mission.meta.ownerId !== who.ownerId) return apiError(res, 403, { code: "FORBIDDEN", message: "mission is owned by another actor", retryable: false, missionId: id });
+      if (kind === "approvals" && m === "GET" && !arg) return json(res, 200, { missionId: id, planRevision: mission.meta.planRevision, approvals: actor.listApprovals(id) });
+      if (kind === "approvals" && m === "POST" && arg) {
+        const b = parse(ApprovalBody, await body(req));
+        return send(res, await actor.decideApproval(id, arg, who.ownerId, b));
+      }
+      if (kind === "evidence" && m === "GET" && arg) {
+        const max = Number(url.searchParams.get("maxChars") ?? 1000);
+        if (!Number.isInteger(max) || max < 1) throw new BadRequest("maxChars must be a positive integer");
+        const ev = actor.evidence(id, arg, max);
+        if (!ev) return apiError(res, 404, { code: "NOT_FOUND", message: `unknown evidence ${arg}`, retryable: false, missionId: id });
+        return json(res, 200, ev);
+      }
+      if (kind === "events" && m === "GET" && !arg) {
+        // Revision hints for this mission only; clients refetch the snapshot (the hint carries no state).
+        res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive" });
+        const hint = (revision: number, type: string) => res.write(`id: ${revision}\ndata: ${JSON.stringify({ missionId: id, revision, type })}\n\n`);
+        hint(actor.revision(id), "snapshot");
+        const off = actor.subscribe((e) => {
+          const d = e.data as { kind?: string; type?: string; revision?: number };
+          if (e.run_id === id && d?.kind === "event" && typeof d.revision === "number") hint(d.revision, String(d.type));
+        });
+        const ka = setInterval(() => res.write(": keepalive\n\n"), 15_000);
+        req.on("close", () => { off(); clearInterval(ka); });
+        return;
+      }
+      return json(res, 405, { error: "method not allowed" });
     }
     const mm = p.match(/^\/missions\/([A-Za-z0-9._-]{1,64})(?:\/(resume|pause|cancel))?$/);
     if (mm) {
@@ -172,7 +217,7 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
       const mission = actor.byId.get(id);
       if (!mission) return unknownMission(res, id);
       if (!who.admin && mission.meta.ownerId !== who.ownerId) return apiError(res, 403, { code: "FORBIDDEN", message: "mission is owned by another actor", retryable: false, missionId: id });
-      if (!verb && m === "GET") return json(res, 200, actor.missionSnapshot(id));
+      if (!verb && m === "GET") { await actor.probeDesk(); return json(res, 200, actor.missionSnapshot(id)); }
       if (verb && m === "POST") {
         const b = parse(MutationBody, await body(req));
         try { return send(res, await actor.command(id, { commandId: b.commandId, kind: verb, expectedRevision: b.expectedRevision })); } catch (e) {

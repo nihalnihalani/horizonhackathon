@@ -179,3 +179,58 @@ describe("mission REST (actor, memory event log)", () => {
     expect((await call("POST", "/internal/dispatch-claim", { actionKey: K1, argsHash: H1, slot: "ferry", epoch: 1 })).status).toBe(401);
   });
 });
+
+describe("evidence, per-mission SSE hints, desk availability", () => {
+  const factRow = (id: string, over: Record<string, unknown>) => ({
+    run_id: id, arm: "dr", ts: new Date().toISOString(), epoch: 1, rev: 0, key: "site-A.status", value: JSON.stringify("open"),
+    source_url: "https://feed.example/status.html", observed_at: "2026-10-08T09:00:00Z", volatile: true, status: "active",
+    nimble_request_id: "task-111", world_version: 1, ...over,
+  });
+
+  it("GET /missions/:id/evidence/:id returns bounded excerpt + provenance for fact:<key>@<version> and obs:<task_id>; no URL fetch", async () => {
+    const c = await call("POST", "/missions", { commandId: "cmd-evid-0001", goal: "g" });
+    const id = String(c.body.missionId);
+    const who = { run_id: id, arm: "dr" as const };
+    await actor.appendRow(who, "facts", factRow(id, {}));
+    await actor.appendRow(who, "facts", factRow(id, { key: "site-C.status" }));
+    await actor.appendRow(who, "facts", factRow(id, { status: "superseded", excerpt: "superseded by \"closed\" (task task-222)" }));
+    await actor.appendRow(who, "facts", factRow(id, { value: JSON.stringify("closed"), nimble_request_id: "direct-333", world_version: 2, observed_at: "2026-10-10T09:00:00Z" }));
+    const f = await call("GET", `/missions/${id}/evidence/${encodeURIComponent("fact:site-A.status@v1")}`);
+    expect(f.status).toBe(200);
+    expect(f.body).toMatchObject({ kind: "fact", provenance: { taskId: "task-111", retrievalMode: "live", worldVersion: 1, status: "superseded", sourceUrl: "https://feed.example/status.html" } });
+    expect(String(f.body.excerpt)).toMatch(/site-A.status = "open" · superseded by/);
+    const f2 = await call("GET", `/missions/${id}/evidence/${encodeURIComponent("fact:site-A.status@2")}`);
+    expect(f2.body).toMatchObject({ provenance: { retrievalMode: "direct", worldVersion: 2, status: "active" } });
+    const o = await call("GET", `/missions/${id}/evidence/${encodeURIComponent("obs:task-111")}?maxChars=20`);
+    expect(o.body).toMatchObject({ kind: "observation", truncated: true, provenance: { taskId: "task-111" } });
+    expect(String(o.body.excerpt)).toHaveLength(20);
+    expect((await call("GET", `/missions/${id}/evidence/${encodeURIComponent("https://evil.example/")}`)).status).toBe(404);
+    expect((await call("GET", `/missions/${id}/evidence/${encodeURIComponent("fact:site-A.status@v9")}`)).status).toBe(404);
+    expect((await call("GET", `/missions/${id}/evidence/x`, undefined, { authorization: `Bearer ${I}`, "x-dr-actor-id": "user-2" })).status).toBe(403);
+  });
+
+  it("GET /missions/:id/events streams revision hints for that mission only", async () => {
+    const a = String((await call("POST", "/missions", { commandId: "cmd-sse-0001", goal: "g" })).body.missionId);
+    const b = String((await call("POST", "/missions", { commandId: "cmd-sse-0002", goal: "g" })).body.missionId);
+    const ac = new AbortController();
+    const r = await fetch(`${base}/missions/${a}/events`, { headers: { authorization: `Bearer ${I}`, "x-dr-actor-id": "user-1" }, signal: ac.signal });
+    expect(r.headers.get("content-type")).toMatch(/text\/event-stream/);
+    const reader = r.body!.getReader();
+    let text = "";
+    const readUntil = async (re: RegExp) => { while (!re.test(text)) { const { value } = await reader.read(); text += new TextDecoder().decode(value); } };
+    await readUntil(/"type":"snapshot"/);
+    await actor.command(b, { commandId: "cmd-sse-0003", kind: "arm_crash", args: { point: "after_claim" } }); // other mission: no hint
+    await actor.command(a, { commandId: "cmd-sse-0004", kind: "arm_crash", args: { point: "after_claim" } });
+    await readUntil(/"type":"COMMAND_ACCEPTED"/);
+    ac.abort();
+    const hints = text.split("\n\n").filter((x) => x.startsWith("id: ")).map((x) => JSON.parse(x.split("data: ")[1]!));
+    expect(hints.every((h) => h.missionId === a)).toBe(true);
+    expect(hints.at(-1)).toMatchObject({ revision: events.watermark(a), type: "COMMAND_ACCEPTED" });
+  });
+
+  it("snapshot availability.desk comes from a short desk probe (unreachable desk → unavailable)", async () => {
+    const id = String((await call("POST", "/missions", { commandId: "cmd-desk-0001", goal: "g" })).body.missionId);
+    const s = await call("GET", `/missions/${id}`);
+    expect(s.body.availability).toMatchObject({ desk: "unavailable" });
+  });
+});

@@ -48,8 +48,8 @@ const invalid = (message: string): Refusal => ({ code: "INVALID_TRANSITION", sta
 /**
  * Resume admission (CONTRACTS §3). Accepts the initial start (`created`), paused/pausing, a recoverable block, or any
  * nonterminal mission whose child is confirmed exited. The resulting status is always `queued`: restore/reconcile runs
- * first. The frozen TRANSITIONS table lacks pausing→queued and <active>→queued after child exit; those edges are the
- * contract's Resume rule, so they are admitted here explicitly (reported as a contract change request).
+ * first. The actor applies it with canTransition(from, "queued", {childExited}) (pausing→queued is in TRANSITIONS;
+ * <active>→queued requires the confirmed child exit).
  */
 export function decideResume(meta: MissionMeta, childActive: boolean): { next: MissionStatus } | Refusal {
   if (childActive) return { code: "WORKER_ACTIVE", status: 409, message: "a runner generation is still active for this mission" };

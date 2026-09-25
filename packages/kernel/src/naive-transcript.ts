@@ -6,7 +6,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { naiveActionKey, type CommitmentRow, type DeskClient } from "@dr/shared";
 import type { Journal } from "./journal.ts";
-import { executeBooking, type BookingStep, type HoldHook, type BookingOutcome } from "./protocol.ts";
+import { executeBooking, type BookingStep, type HoldHook, type BookingOutcome, type ProtocolDeps } from "./protocol.ts";
 
 export type Transcript = {
   run_id: string;
@@ -49,9 +49,9 @@ export class NaiveTranscript {
   }
 
   /** Book through the same write-ahead protocol, but with the attempt-derived key and only the transcript's view. */
-  async book(journal: Journal, desk: DeskClient, t: Transcript, step: BookingStep, hold?: HoldHook, log?: (l: string) => void): Promise<BookingOutcome> {
+  async book(journal: Journal, desk: DeskClient, t: Transcript, step: BookingStep, hold?: HoldHook, log?: (l: string) => void, deps: Pick<ProtocolDeps, "claimDispatch"> = {}): Promise<BookingOutcome> {
     const view: Record<string, CommitmentRow> = {}; // the transcript has no typed commitments
-    const out = await executeBooking({ journal, desk, keyOverride: this.keyFor(t, step), commitmentsView: view, log }, step, hold);
+    const out = await executeBooking({ journal, desk, keyOverride: this.keyFor(t, step), commitmentsView: view, log, claimDispatch: deps.claimDispatch }, step, hold);
     t.steps[step.step_id] = { status: out.receipt.committed ? "done" : "rejected", resource: step.resource, receipt_id: out.receipt.receipt_id };
     t.lines.push(`booked ${step.step_id} ${step.resource} → ${out.receipt.outcome} ${out.receipt.receipt_id}`);
     this.save(t);

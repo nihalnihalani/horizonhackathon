@@ -10,7 +10,7 @@ import {
   type FactRow, type Projection, type Slot,
 } from "@dr/shared";
 import {
-  DispatchRefused, HttpDeskClient, Journal, NaiveTranscript, OutcomeUnknown, executeBooking, recover, type BookingStep, type Transcript,
+  DispatchRefused, HttpDeskClient, Journal, NaiveTranscript, OutcomeUnknown, RetryArgsChanged, executeBooking, recover, type BookingStep, type Transcript,
 } from "@dr/kernel";
 import {
   applyContextOps, compareOpRow, constraintsFromProjection, contextOpRows, createProviders, factsFromObservation,
@@ -19,16 +19,15 @@ import {
 import { emptyProjection } from "@dr/storage";
 import { HttpProjectionLoader, HttpRowSink, emit, httpClaimDispatch, httpIntentGate } from "./io.ts";
 import { validateRun } from "./validator.ts";
+import { noCandidateReason } from "./candidates.ts";
 import { ensureInitialization, seedRun } from "./initialization.ts";
 
 const { values: argv } = parseArgs({
   options: { "status-url": { type: "string" }, "sim-clock": { type: "string" }, resume: { type: "string" }, transcript: { type: "string" } },
   strict: false,
 });
-// never reads .env from disk. DR_CRASH_AFTER is parsed here as any CrashPoint (the frozen runner scope only admits
-// after_desk_commit), so it is validated separately and blanked for loadConfig.
-const crashPoint = process.env.DR_CRASH_AFTER ? CrashPoint.parse(process.env.DR_CRASH_AFTER) : null;
-const cfg = loadConfig("runner", { ...process.env, DR_CRASH_AFTER: "" });
+const cfg = loadConfig("runner"); // never reads .env from disk; DR_CRASH_AFTER admits every CrashPoint
+const crashPoint: CrashPoint | null = cfg.DR_CRASH_AFTER || null;
 const runId = cfg.DR_RUN_ID;
 const arm = cfg.DR_ARM;
 const link = { baseUrl: cfg.DR_CONTROL_URL.replace(/\/$/, ""), token: cfg.DR_RUNNER_TOKEN };
@@ -209,7 +208,7 @@ async function runDr(): Promise<"done" | "stopped"> {
     }
     let cands: CandidateX[];
     if (ps.slot === "campsite") {
-      const staleCands = SITES.map((s) => `site-${s}.status`).filter((k) => j.state.facts[k]?.status === "stale");
+      const staleCands = SITES.map((s) => `site-${s}.status`).filter((k) => j.state.facts[k]?.status !== "active");
       if (staleCands.length) {
         const r = await revalidate(id, staleCands, m);
         if (!r.ok) { await blockStep(j, id, r.reason); continue; }
@@ -220,6 +219,8 @@ async function runDr(): Promise<"done" | "stopped"> {
     }
     const rendered = renderWorkingContext({ projection: j.state, step: id, evicted, evidence });
     const ctx: PlannerContext = { constraints: constraintsFromProjection(j.state), spent_cents: spentCents(j.state, ps.slot) };
+    const none = noCandidateReason(cands, ctx, ps.slot);
+    if (none) { await blockStep(j, id, none); continue; }
     const d = await prov.planner.decide(rendered, id, cands, ctx);
     const rej = d.rejected_candidates.map((r) => `${r.resource}:${r.reason}`).join(", ");
     log(`PLANNER ${id}: ${d.action}${d.resource ? ` ${d.resource}` : ""} — ${d.reason} · context_tokens ${d.context_tokens.count} · planner_tokens_in ${d.planner_tokens_in}${rej ? ` · code-rejected ${rej}` : ""}`);
@@ -237,6 +238,8 @@ async function runDr(): Promise<"done" | "stopped"> {
       // pause/cancel won the claim race: stop dispatching; the parent finishes pause/cancel. No verdict is claimed.
       if (e instanceof DispatchRefused) { emit("dispatch_refused", { step: id, code: e.refusal, reason: e.reason }); return "stopped"; }
       if (e instanceof OutcomeUnknown) { await blockStep(j, id, `outcome_unknown: ${e.message}`); continue; }
+      // F2: a not_executed key whose preconditions changed (e.g. world version) is never resent with new args
+      if (e instanceof RetryArgsChanged) { await blockStep(j, id, `precondition_changed: ${e.message}`); continue; }
       throw e;
     }
     log(`DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id} $${(out.receipt.amount / 100).toFixed(2)}`);
@@ -289,7 +292,19 @@ async function runNaive() {
     t.lines.push(`user: next, the ${id}.`, `assistant: ${d.action} ${d.resource ?? ""} — ${d.reason}`);
     tr.save(t);
     if (d.action !== "book" || !d.resource) continue;
-    const out = await tr.book(j, desk, t, stepFor(id, d.resource, t.world_version), { holdAfterCommit: crashPoint === "after_desk_commit" && id === F3.crash_step, holdMs: HOLD_MS }, log);
+    let out;
+    try {
+      // same claim machinery as the DR arm; the naive arm keeps its attempt-derived keys (labelled by control)
+      out = await tr.book(j, desk, t, stepFor(id, d.resource, t.world_version), { holdAfterCommit: crashPoint === "after_desk_commit" && id === F3.crash_step, holdMs: HOLD_MS }, log, { claimDispatch });
+    } catch (e) {
+      if (!(e instanceof DispatchRefused)) throw e;
+      log(`NAIVE DISPATCH REFUSED ${id} ${d.resource}: ${e.refusal} — ${e.reason}`);
+      emit("dispatch_refused", { step: id, code: e.refusal, reason: e.reason, naive: true });
+      t.lines.push(`tool: control refused dispatch for ${id} (${e.refusal})`);
+      tr.save(t);
+      if (e.refusal !== "SLOT_BUSY") return;
+      continue;
+    }
     log(`NAIVE DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id}`);
     emit("booking", { step: id, resource: d.resource, outcome: out.receipt.outcome, reject_reason: out.receipt.reject_reason ?? null, receipt_id: out.receipt.receipt_id, action_key: out.action_key, amount: out.receipt.amount });
     t.lines.push(`tool: desk ${out.receipt.outcome} ${d.resource}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id}`);

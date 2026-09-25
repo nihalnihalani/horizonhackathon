@@ -1,11 +1,11 @@
 // R04 (desk response lost after commit), R05 (desk unavailable during reconcile), dispatch-claim refusal, lookup-only
 // reconciliation and original-args-only retry (R11 kernel half). FakeRawTree + real desk on loopback, in-process.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { InvariantViolation, actionKey, type BookRequest, type DeskClient, type DeskReceipt, type LookupResult } from "@dr/shared";
+import { InvariantViolation, actionKey, naiveActionKey, type BookRequest, type DeskClient, type DeskReceipt, type LookupResult } from "@dr/shared";
 import { FakeRawTree, RawTreeClient, RawTreeLoader, RawTreeSink } from "@dr/storage";
 import { startDesk, type RunningDesk } from "@dr/desk";
 import {
-  DeskUnavailable, DispatchRefused, HttpDeskClient, Journal, OutcomeUnknown, RetryArgsChanged, executeBooking, f3FerryStep, recover, runFerryStep,
+  DeskUnavailable, DispatchRefused, HttpDeskClient, Journal, NaiveTranscript, OutcomeUnknown, RetryArgsChanged, executeBooking, f3FerryStep, recover, runFerryStep,
 } from "../src/index.ts";
 
 const W = "wt", O = "ot";
@@ -122,5 +122,32 @@ describe("dispatch claim + lookup-only reconciliation", () => {
     const out = await executeBooking({ journal: resumed.journal, desk: d, log: quiet }, f3FerryStep(1), { holdAfterCommit: false });
     expect(out.action_key).toBe(keyFor(run));
     expect(desk.store.ledger({ run_id: run }).outcomes).toHaveLength(1);
+  });
+});
+
+describe("naive arm goes through the same dispatch claim (attempt-derived keys kept)", () => {
+  it("claims with its attempt-derived key; a refusal (e.g. SLOT_BUSY after a crash) means no desk POST", async () => {
+    const { mkdtempSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "dr-naive-claim-"));
+    try {
+      const run = `f3-20260926-n${(++n).toString().padStart(3, "0")}`;
+      const d = new LossyDesk(new HttpDeskClient({ baseUrl: desk.url, token: W }));
+      const journal = new Journal(new RawTreeSink(client), { run_id: run, arm: "naive", epoch: 1 });
+      const tr = new NaiveTranscript(join(dir, "t.json"));
+      const t = tr.resume(run);
+      const f = f3FerryStep();
+      const seen: string[] = [];
+      await tr.book(journal, d, t, f, { holdAfterCommit: false }, quiet, { claimDispatch: async (a) => { seen.push(a.actionKey); return { granted: true, dispatchId: "dsp-n1" }; } });
+      expect(seen).toEqual([naiveActionKey(run, f.step_id, f.resource, f.date, f.party, 1)]);
+      expect(seen[0]).not.toBe(keyFor(run)); // labelled naive behaviour: not the stable business key
+      const t2 = tr.resume(run);
+      const j2 = new Journal(new RawTreeSink(client), { run_id: run, arm: "naive", epoch: 2 });
+      await expect(tr.book(j2, d, t2, f, { holdAfterCommit: false }, quiet, { claimDispatch: async () => ({ granted: false, code: "SLOT_BUSY", reason: "slot ferry already has an unresolved claim" }) }))
+        .rejects.toBeInstanceOf(DispatchRefused);
+      expect(d.books).toBe(1);
+      expect(desk.store.ledger({ run_id: run }).outcomes).toHaveLength(1);
+    } finally { rmSync(dir, { recursive: true, force: true }); }
   });
 });

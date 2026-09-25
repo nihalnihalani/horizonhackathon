@@ -2,8 +2,8 @@
 // HttpProjectionLoader, intent gate, dispatch claim) + kernel recovery + the F3 ferry step, without providers.
 // Spawned by MissionActor (opts.runnerMain) with the same env allowlist as the real runner.
 import { CrashPoint, type Arm } from "@dr/shared";
-import { DispatchRefused, HttpDeskClient, recover, runFerryStep } from "@dr/kernel";
-import { HttpProjectionLoader, HttpRowSink, httpClaimDispatch, httpIntentGate } from "@dr/runner/io";
+import { DispatchRefused, HttpDeskClient, RetryArgsChanged, recover, runFerryStep } from "@dr/kernel";
+import { HttpProjectionLoader, HttpRowSink, emit, httpClaimDispatch, httpIntentGate } from "@dr/runner/io";
 
 const env = process.env;
 const runId = env.DR_RUN_ID!;
@@ -24,10 +24,20 @@ try {
   const out = await runFerryStep(
     { journal: rec.journal, desk, log, awaitIntentVisible: httpIntentGate(link), claimDispatch: httpClaimDispatch(link, epoch) },
     { holdAfterCommit: point === "after_desk_commit", point, holdMs: Number(env.DR_HOLD_MS ?? 120_000) },
+    await desk.worldVersion(), // like the runner: expected_world_version is the current world at dispatch
   );
   log(`booking-child: ferry ${out.receipt.outcome} ${out.receipt.receipt_id}`);
 } catch (e) {
   if (e instanceof DispatchRefused) { log(`booking-child: stopped (${e.refusal})`); process.exit(0); }
+  if (e instanceof RetryArgsChanged) {
+    // same handling as runner/main.ts: block the step, end with an explicit BLOCKED verdict (no resend, exit 0)
+    const reason = `precondition_changed: ${e.message}`;
+    const s = rec.journal.state.plan_steps.ferry!;
+    await rec.journal.append("plan_steps", { step_id: "ferry", slot: s.slot, resource: s.resource, depends_on: s.depends_on, commitment_key: s.commitment_key ?? null, status: "blocked", reason });
+    log(`STEP ferry BLOCKED: ${reason}`);
+    emit("verdict", { verdict: "BLOCKED", reason: `ferry: blocked (${reason})`, duplicate_effects: 0, stale_actions: 0 });
+    process.exit(0);
+  }
   throw e;
 }
 process.exit(0);
