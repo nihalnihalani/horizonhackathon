@@ -1,0 +1,77 @@
+{
+  "batch_id": "m1-paired-20260925-79b6fa",
+  "created_at": "2026-09-25T21:46:25.719Z",
+  "code_revision": "c8d3a8eecf97cda75d7428445ac23f112a9fc7eb",
+  "comparable": true,
+  "comparability_reasons": [],
+  "dr": {
+    "batch_id": "m1-paired-20260925-79b6fa",
+    "created_at": "2026-09-25T21:46:25.690Z",
+    "code_revision": "c8d3a8eecf97cda75d7428445ac23f112a9fc7eb",
+    "fixture": {
+      "name": "M1",
+      "version": "m1-v1",
+      "sha256": "a63ebb18f6fcc47a252e2695467eded77ba51af1c1aaa88b3627dc1c8e5775ba"
+    },
+    "planner_input_cap": 6000,
+    "summary_cap_tokens": 800,
+    "tools": [
+      "book",
+      "cancel",
+      "keep",
+      "block"
+    ],
+    "safety_rules": [
+      "desk-idempotent",
+      "context-composer-validator",
+      "planner-candidate-revalidation"
+    ],
+    "crash_schedule": [],
+    "arms": [
+      {
+        "arm": "dr",
+        "policy_version": "dr-context-v1",
+        "mode": "stub",
+        "planner_model": null,
+        "curator_or_summarizer_model": "rule",
+        "prompt_hashes": {}
+      }
+    ]
+  },
+  "baseline": {
+    "batch_id": "m1-paired-20260925-79b6fa",
+    "created_at": "2026-09-25T21:46:25.705Z",
+    "code_revision": "c8d3a8eecf97cda75d7428445ac23f112a9fc7eb",
+    "fixture": {
+      "name": "M1",
+      "version": "m1-v1",
+      "sha256": "a63ebb18f6fcc47a252e2695467eded77ba51af1c1aaa88b3627dc1c8e5775ba"
+    },
+    "planner_input_cap": 6000,
+    "summary_cap_tokens": 800,
+    "tools": [
+      "book",
+      "cancel",
+      "keep",
+      "block"
+    ],
+    "safety_rules": [
+      "desk-idempotent",
+      "context-composer-validator",
+      "planner-candidate-revalidation"
+    ],
+    "crash_schedule": [],
+    "arms": [
+      {
+        "arm": "baseline",
+        "policy_version": "checkpoint-summary-v1",
+        "mode": "stub",
+        "planner_model": null,
+        "curator_or_summarizer_model": "stub-summarizer-v1",
+        "prompt_hashes": {
+          "summary_prompt": "23cdd03e7e4364ce97956f4e74caebf77df33cabc817d049af140dad1e9beb4c"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,4 @@
+- C06 MET: ok
+- C07 NOT MET: curator mode is stub/rule, not the real local Liquid model; no live curator (Liquid) call was made; no Liquid-proposed eviction was accepted and reflected in a following item-set change
+- Single M1 run per arm; no repeated-batch statistics (sample size 1). Not a claim of days-long or continuous multi-mission reliability.
+- Both arms share one EvidenceRegistry and canonical world ledger (bench/world.ts); no live desk/kernel/control process is exercised by this bench.

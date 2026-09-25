@@ -1,0 +1,21 @@
+{"arm":"dr","round":1,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":2,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":3,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":4,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":5,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":6,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":7,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":8,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":9,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":10,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1002 found=true"}
+{"arm":"dr","round":11,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1008 found=true"}
+{"arm":"dr","round":12,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"baseline","round":4,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":2,"input_tokens":943,"output_tokens":800,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":5,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":3,"input_tokens":2611,"output_tokens":800,"note":"summarized 2 evicted observation(s)"}
+{"arm":"baseline","round":6,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":3,"input_tokens":1703,"output_tokens":800,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":7,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":3,"input_tokens":1722,"output_tokens":800,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":8,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":5,"input_tokens":2596,"output_tokens":800,"note":"summarized 2 evicted observation(s)"}
+{"arm":"baseline","round":9,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":3,"input_tokens":1717,"output_tokens":800,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":10,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1002 found=true"}
+{"arm":"baseline","round":11,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1008 found=true"}
+{"arm":"baseline","round":12,"kind":"summary","mode":"stub","model":"stub-summarizer-v1","latency_ms":3,"input_tokens":1720,"output_tokens":800,"note":"summarized 1 evicted observation(s)"}

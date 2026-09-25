@@ -1,0 +1,3 @@
+- planner=stub recorded but not invoked by bench:memory (context-only trace; run bench:paired for planner calls)
+- C06 MET: accepted eviction removed detail; pins preserved; recall ok
+- C07 NOT MET: curator mode is stub/rule, not the real local Liquid model; no live curator (Liquid) call was made; no Liquid-proposed eviction was accepted and reflected in a following item-set change

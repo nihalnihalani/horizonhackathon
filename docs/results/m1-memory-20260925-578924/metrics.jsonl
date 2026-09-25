@@ -1,0 +1,12 @@
+{"arm":"dr","round":1,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":2,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":3,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":4,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":5,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":6,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":7,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":8,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":9,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
+{"arm":"dr","round":10,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1002 found=true"}
+{"arm":"dr","round":11,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1008 found=true"}
+{"arm":"dr","round":12,"kind":"curator","mode":"stub","model":"rule","latency_ms":0,"note":"proposed_by=rule"}
