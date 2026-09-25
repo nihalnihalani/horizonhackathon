@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "skills": {
+    "brand-mention-monitor": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/brand-mention-monitor/SKILL.md",
+      "computedHash": "a27846ba424b604f1af77e7e00dd02f25a3f978805b4fad60e4a1455d076b329"
+    },
+    "company-deep-dive": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/company-deep-dive/SKILL.md",
+      "computedHash": "65e405545f67e5af713bfb9438ef4b36074dfa49c41bb0d7f39d73244069627a"
+    },
+    "competitor-intel": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/competitor-intel/SKILL.md",
+      "computedHash": "9887e7755b3f6fa3894ccc4e1da66ebe1afc8e6007f2b2ef2b6eb4a19e8c5185"
+    },
+    "competitor-positioning": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/competitor-positioning/SKILL.md",
+      "computedHash": "f758c964177037a24a3a23168a9f579ecea34f5e24f19168b791007052169f78"
+    },
+    "healthcare-providers-enrich": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/healthcare-providers-enrich/SKILL.md",
+      "computedHash": "2400e5a7cc312561339384cec676b94a0389e9d1750aacc66aed39d3ed4ab600"
+    },
+    "healthcare-providers-extract": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/healthcare-providers-extract/SKILL.md",
+      "computedHash": "1324c78d0bd77cdce9680b226dd401ea35f46174ad19cc52be261dd34ad6b157"
+    },
+    "healthcare-providers-verify": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/healthcare-providers-verify/SKILL.md",
+      "computedHash": "07420751811242ab11e7708429fb63187daf865272a9d12dec53f1d460800e42"
+    },
+    "launch-monitor": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/launch-monitor/SKILL.md",
+      "computedHash": "2ef1ecd45afda15cb09a75b27224b2d6a0ae9ac7014df9196104754540761892"
+    },
+    "local-places": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/local-places/SKILL.md",
+      "computedHash": "b4a6118e705968a4ef1a7399dea7e90486f3f26d1b94a08abe0239c5cc077b74"
+    },
+    "market-finder": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/market-finder/SKILL.md",
+      "computedHash": "d2c5df078f097bfdaff2c066e7dfb0536452e24e636e3ed91f81dc7b004e4bda"
+    },
+    "meeting-prep": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/meeting-prep/SKILL.md",
+      "computedHash": "9fb22093357978d92700ac68455310464a90ab18b000b56d41e7c8c6aaead991"
+    },
+    "nimble-databricks-data-products": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/nimble-databricks-data-products/SKILL.md",
+      "computedHash": "28bbf59689ab14d4a9e2d2a2b235477fa4621a15b5536750030781940d7b669d"
+    },
+    "nimble-web-expert": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/nimble-web-expert/SKILL.md",
+      "computedHash": "8255d738fb8123364eb3f84d0d85c3f30405ef43c5d0103de210bb559acbb734"
+    },
+    "rawtree": {
+      "source": "rawtreedb/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/rawtree/SKILL.md",
+      "computedHash": "55df57e48efb6bc4c11a77a4c47a903c4e39583bf72b97878f26536938547a78"
+    },
+    "seo-intel": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/seo-intel/SKILL.md",
+      "computedHash": "1fd2f2457123ab323535af9fc794d606ebc2b88c10f496b5b3962f95aedb4c50"
+    },
+    "talent-sourcing": {
+      "source": "Nimbleway/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/talent-sourcing/SKILL.md",
+      "computedHash": "f6151222cb11cfb32bcee1ea6bb02ff0bd2357017481934a87c681aed52cdd8a"
+    }
+  }
+}

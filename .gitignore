@@ -19,3 +19,6 @@ artifacts/
 apps/console/.env
 apps/console/node_modules/
 transcript*.json
+
+# local tool state; .omc/smoke holds a backup of .env with real keys
+.omc/
