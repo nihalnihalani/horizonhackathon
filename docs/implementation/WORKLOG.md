@@ -309,3 +309,7 @@ Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real R
   - **D5 P3:** fixed.
   - **D6 P3:** the desk allows a lookup without a namespace. Deferred; defensive only, since every runner passes one.
 - dr-critic recheck at fe03812: F1–F8 closed, no new P0/P1.
+- Verifier D2/D3 follow-ups are closed at the test level:
+  - S11 and F02 (4118f76, 11 tests).
+  - U01 and U02 (29 console app tests). The mission screen now enforces the revision guard at the fetch boundary.
+  - Still not run: the browser against a live OpenBot, which needs an OpenBot database on the demo machine.
