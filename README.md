@@ -6,6 +6,13 @@ Design docs: [AGENTS.md](AGENTS.md), [docs/FINAL_PROJECT.md](docs/FINAL_PROJECT.
 
 ## Run it
 
+One script runs everything: `./run.sh`.
+
+- **`./run.sh`** or **`./run.sh up [--phone]`** starts Liquid, Postgres, the status-feed tunnel, desk, control and OpenBot. It is idempotent: anything already running is reused. `--phone` also starts the phone gateway and its tunnel.
+- **Other commands:** `./run.sh status`, `./run.sh demo [f3b]`, `./run.sh test`, `./run.sh doctor` and `./run.sh down`. `down` stops only the processes `run.sh` started.
+
+The manual steps below still work.
+
 Prereqs: root `.env` (git-ignored; see `.env.example`), `npm install`, llama-server with LFM2.5-1.2B on 127.0.0.1:8081, and (for Nimble to reach the status page) `ngrok http 127.0.0.1:4402`. Control auto-detects the ngrok tunnel; without it the runner falls back to a plain fetch of `http://127.0.0.1:4402/status.html` and labels it `FALLBACK direct fetch (NOT Nimble)` in every log line.
 
 ```sh
