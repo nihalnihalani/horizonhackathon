@@ -169,7 +169,7 @@ export interface ContextComposer {
 // ---------- control / AG-UI ----------
 export interface AgUiMissionPort {
   /** Verbs: start | status | resume | kill (message may name a run_id). Yields markdown/text chunks. */
-  handle(text: string, threadId: string): AsyncIterable<string>;
+  handle(text: string, threadId: string, ctx?: { actorId: string }): AsyncIterable<string>;
 }
 
 // ---------- kernel ----------

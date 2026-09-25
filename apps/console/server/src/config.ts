@@ -329,6 +329,19 @@ export type DeploymentConfig = {
    * door for them standing open.
    */
   workerSharedSecret?: string;
+  /**
+   * Dead Reckoning control API and OpenBot's own credential for calling it, and the credential
+   * OpenBot's `POST /api/dead-reckoning/internal/verify-run` route checks an incoming call
+   * against.
+   *
+   * `DR_*` names are a newly proposed Dead Reckoning configuration surface (CONTRACTS §8), not
+   * variables OpenBot already supported. `DR_INTERNAL_TOKEN` is shared only between OpenBot and DR
+   * control; it never reaches the runner. Absent means the proxy and the verify-run route both
+   * refuse everything, mirroring how an absent `WORKER_SHARED_SECRET` closes the routines door —
+   * a deployment that has not set this up should have no open door for it, not one that answers.
+   */
+  drControlUrl?: string;
+  drInternalToken?: string;
 };
 
 type Environment = Record<string, string | undefined>;
@@ -1249,6 +1262,8 @@ export function loadConfig(
     : undefined;
   const managedAgent = managedAgentConfig(environment);
   const workerSharedSecret = optional(environment, "WORKER_SHARED_SECRET");
+  const drControlUrl = optional(environment, "DR_CONTROL_URL") ?? "http://127.0.0.1:4400";
+  const drInternalToken = optional(environment, "DR_INTERNAL_TOKEN");
 
   return {
     port: serverPort(environment),
@@ -1296,5 +1311,7 @@ export function loadConfig(
       ? { agentToolToken: optional(environment, "AGENT_TOOL_TOKEN") as string }
       : {}),
     ...(workerSharedSecret ? { workerSharedSecret } : {}),
+    drControlUrl,
+    ...(drInternalToken ? { drInternalToken } : {}),
   };
 }

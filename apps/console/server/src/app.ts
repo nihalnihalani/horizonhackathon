@@ -10,7 +10,9 @@ import {
 } from "./agents/callback-token";
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
+import type { AgentActor } from "./agents/profile-types";
 import { createAgentRoutes } from "./agents/routes";
+import { createDeadReckoningRoutes } from "./dead-reckoning/routes";
 import {
   type AuditEventType,
   type AuditInitiator,
@@ -1112,6 +1114,35 @@ export function createApp(
     ? async (actor, botId) =>
         (await agentProfileStore.get(actor, botId)) !== null
     : async () => true;
+
+  /*
+   * Dead Reckoning console integration (AGENTS.md "OpenBot adoption"). The browser proxy sits
+   * behind requireUser like every other route here; the internal verify-run route is a second,
+   * separate door authenticated only by DR_INTERNAL_TOKEN, mounted regardless of requireUser's
+   * availability since DR control is the caller, not a signed-in person.
+   *
+   * checkBotAccess reuses the same rule canUseBot already answers, resolving the verified actor id
+   * back to a role through roleRepository (absent in dev/single-user mode, where every visitor is
+   * already the one administrator and there is no roles table to check).
+   */
+  app.route(
+    "/api/dead-reckoning",
+    createDeadReckoningRoutes(
+      requireUser,
+      {
+        drControlUrl: config.drControlUrl ?? "http://127.0.0.1:4400",
+        drInternalToken: config.drInternalToken,
+        keyEncryptionKey: config.keyEncryptionKey,
+      },
+      roleRepository
+        ? async (actorId, botId) => {
+            const roles = await roleRepository.rolesForUser(actorId);
+            const actor: AgentActor = { id: actorId, role: roles.includes("admin") ? "admin" : "user" };
+            return canUseBot(actor, botId);
+          }
+        : undefined,
+    ),
+  );
 
   // The Bot computer. Acting on a page needs the gateway and the policy it enforces, so both arrive
   // together or the routes are not mounted. An ungoverned computer is not a reduced feature. It is

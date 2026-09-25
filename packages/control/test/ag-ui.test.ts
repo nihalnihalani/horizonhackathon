@@ -2,13 +2,13 @@ import { describe, it, expect, afterAll } from "vitest";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { AgUiMissionPort } from "@dr/shared/ports";
-import { createAgUiHandler, stubMissionPort } from "../src/ag-ui/handler";
+import { createAgUiHandler, stubMissionPort, type AgUiHandlerOptions } from "../src/ag-ui/handler";
 
 const input = { threadId: "t1", runId: "r1", messages: [{ id: "m1", role: "user", content: "hello" }], tools: [], context: [], state: {}, forwardedProps: {} };
 const servers: Server[] = [];
 
-async function serve(port: AgUiMissionPort): Promise<string> {
-  const h = createAgUiHandler(port);
+async function serve(port: AgUiMissionPort, opts?: AgUiHandlerOptions): Promise<string> {
+  const h = createAgUiHandler(port, opts);
   const s = createServer((req, res) => void h(req, res));
   servers.push(s);
   await new Promise<void>((r) => s.listen(0, "127.0.0.1", r));
@@ -50,5 +50,79 @@ describe("AG-UI handler", () => {
     const t = types(await (await fetch(url, { method: "POST", body: JSON.stringify(input) })).text());
     expect(t).toContain("RUN_ERROR");
     expect(t).not.toContain("RUN_FINISHED");
+  });
+
+  describe("assertion gate (U05)", () => {
+    it("keeps today's behavior and calls the port when requireAssertion is unset", async () => {
+      let called = false;
+      const url = await serve({ async *handle() { called = true; yield "ok"; } });
+      await (await fetch(url, { method: "POST", body: JSON.stringify(input) })).text();
+      expect(called).toBe(true);
+    });
+
+    it("refuses with RUN_ERROR and never calls the port when no assertion is forwarded", async () => {
+      let called = false;
+      const url = await serve(
+        { async *handle() { called = true; yield "ok"; } },
+        { requireAssertion: true, verify: async () => ({ actorId: "should-not-run" }) },
+      );
+      const res = await fetch(url, { method: "POST", body: JSON.stringify(input) });
+      const t = types(await res.text());
+      expect(t).toContain("RUN_ERROR");
+      expect(t).not.toContain("RUN_FINISHED");
+      expect(called).toBe(false);
+    });
+
+    it("refuses when verify rejects a forged/expired/wrong-Bot assertion", async () => {
+      let called = false;
+      const withAssertion = { ...input, forwardedProps: { openbotRun: "forged" } };
+      const url = await serve(
+        { async *handle() { called = true; yield "ok"; } },
+        { requireAssertion: true, verify: async () => null },
+      );
+      const t = types(await (await fetch(url, { method: "POST", body: JSON.stringify(withAssertion) })).text());
+      expect(t).toContain("RUN_ERROR");
+      expect(called).toBe(false);
+    });
+
+    it("admits a valid assertion and passes the verified actorId to the port as ctx", async () => {
+      const seenCtx: unknown[] = [];
+      const withAssertion = { ...input, forwardedProps: { openbotRun: "signed-value" } };
+      const url = await serve(
+        {
+          async *handle(text: string, threadId: string, ctx?: unknown) {
+            seenCtx.push(ctx);
+            yield "ok";
+          },
+        } as unknown as AgUiMissionPort,
+        { requireAssertion: true, verify: async () => ({ actorId: "actor-1" }) },
+      );
+      const t = types(await (await fetch(url, { method: "POST", body: JSON.stringify(withAssertion) })).text());
+      expect(t).toContain("RUN_FINISHED");
+      expect(seenCtx).toEqual([{ actorId: "actor-1" }]);
+    });
+  });
+
+  describe("transport-retry dedupe", () => {
+    it("does not start a second business command for a repeated (threadId, messageId)", async () => {
+      let calls = 0;
+      const url = await serve({ async *handle() { calls += 1; yield "ok"; } });
+      await (await fetch(url, { method: "POST", body: JSON.stringify(input) })).text();
+      const replay = types(
+        await (await fetch(url, { method: "POST", body: JSON.stringify({ ...input, runId: "r2" }) })).text(),
+      );
+      expect(calls).toBe(1);
+      expect(replay).toContain("RUN_FINISHED");
+      expect(replay).not.toContain("RUN_ERROR");
+    });
+
+    it("treats a different message id on the same thread as a new command", async () => {
+      let calls = 0;
+      const url = await serve({ async *handle() { calls += 1; yield "ok"; } });
+      await (await fetch(url, { method: "POST", body: JSON.stringify(input) })).text();
+      const second = { ...input, runId: "r2", messages: [{ id: "m2", role: "user", content: "hello again" }] };
+      await (await fetch(url, { method: "POST", body: JSON.stringify(second) })).text();
+      expect(calls).toBe(2);
+    });
   });
 });
