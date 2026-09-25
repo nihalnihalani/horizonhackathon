@@ -330,3 +330,17 @@ Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real R
 - Checks: `check:types` ok, `check:lint` 0 problems, `test:unit` 198/198, `test:recovery` 17/17.
 - Live `demo-f3.sh` on the merged branch (f3-20260925-5b70): **10/11**. DR VALID $280, one ferry, receipt RECOVERED FROM DESK, Liquid superseded site-A, repaired to site-C. `/scorecard` serves desk-ledger results. The only failure is again the Nimble-retrieval check, because there is no ngrok token on this machine.
 - `full-plan` now contains all of `main`, so fast-forwarding `main` to it is conflict-free.
+
+### 16:40 PT — live verification on this machine: tunnel, OpenBot browser, signed identity
+
+- **Nimble live.** A cloudflared quick tunnel serves the public feed only (127.0.0.1:4402; every other desk route returns 404 through it). Nimble extract `parse_mode: nimble`, 14 fields.
+- **OpenBot live.** Local Postgres 17 + pgvector on 127.0.0.1:5433; migrations applied; app and API listening on 127.0.0.1 only.
+  - Browser (Chrome DevTools) on the mission screen: the authenticated proxy rejected a body `ownerId`, created a mission, and Resume ran it to **VALID** $270 with 4 simulated receipts. Screenshot: `artifacts/fullplan-openbot-mission-valid.png`.
+  - Fixed: Resume was disabled for created missions.
+- **Signed identity live.** Control ran with `DR_REQUIRE_AGUI_ASSERTION=true`. The OpenBot chat was verified through the real verify-run route and answered. A forged assertion with a valid bearer got RUN_ERROR; no bearer got 401.
+- **Chat rehearsal on full-plan** (plan → kill → close site A → resume, runs f3-20260925-446c / 03a7):
+  - DR **VALID** $280 on site C; naive BLOCKED (tried closed site A).
+  - Desk ledger: 1 ferry each.
+  - Planner tokens: DR 532→617→437→452 vs naive 485→552→638→697→784.
+  - The rehearsal ran from a clean worktree at 43a4740.
+  - The browser tab closed during resume; the outcome was read from control and /scorecard.
