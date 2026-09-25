@@ -104,7 +104,7 @@ describe("R02 on durable canonical events", () => {
 });
 
 describe("S10 through the actor: ambiguous canonical append survives child death", () => {
-  it("unresolved pending blocks restore and new revisions; once visible it resolves exactly once", async () => {
+  it("a pending append is resolved by its original id/hash before the next revision; exactly one identity", async () => {
     const { actor, events } = await control();
     const c = await actor.createMission({ commandId: cid("create"), ownerId: "user-1", goal: "F3" });
     const id = String(c.body.missionId);
@@ -114,17 +114,19 @@ describe("S10 through the actor: ambiguous canonical append survives child death
     const armed = await actor.command(id, { commandId: cid("arm"), kind: "arm_crash", args: { point: "after_intent" } }).catch((e) => e);
     expect(events.pending(id)).not.toBeNull();
     expect(events.watermark(id)).toBe(before);
-    // New revisions are refused while pending.
-    await expect(actor.command(id, { commandId: cid("again"), kind: "arm_crash", args: { point: "after_claim" } })).rejects.toThrow();
-    // Restore is blocked: the 500 stored nothing, so the first resolve retries the SAME identity and it becomes visible.
+    // The next command first resolves the pending append by its original id/hash (the 500 stored nothing, so the
+    // resolve re-sends the SAME identity), then takes the next revision. (A pending append that cannot be resolved
+    // still suspends the mission: pending-append.test.ts "stays unresolved".)
     const pendingEvent = events.pending(id)!.event;
-    const res = await actor.projection(id, "resume").then(() => "restored", (e: Error) => e.message);
+    const again = await actor.command(id, { commandId: cid("again"), kind: "arm_crash", args: { point: "after_claim" } });
+    expect(again.http).toBe(202);
     const stored = storedEvents(id).filter((e) => e.eventId === pendingEvent.eventId);
     expect(stored.length).toBeGreaterThanOrEqual(1);
     expect(new Set(stored.map((e) => e.payloadHash))).toEqual(new Set([pendingEvent.payloadHash]));
-    expect(res).toBe("restored");
     expect(events.pending(id)).toBeNull();
-    expect(events.watermark(id)).toBe(before + 1);
+    expect(events.watermark(id)).toBe(before + 2);
+    const res = await actor.projection(id, "resume").then(() => "restored", (e: Error) => e.message);
+    expect(res).toBe("restored");
     void armed;
   });
 });

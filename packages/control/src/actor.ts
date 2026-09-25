@@ -12,7 +12,7 @@ import {
   ACTIVE_STATUSES, AckError, F3, HOLD_LINE_PREFIX, REPO_ROOT, TRANSITIONS, assertRunId, buildRunnerEnv, canTransition, encodeSse, eventTypeForRow,
   hashPayload, isTableName, makeEvent, newRunId, parseRow,
   type Arm, type CanonicalEventSink, type CommandKind, type ConfigOf, type CrashPoint, type DeskClient, type EventType,
-  type FactRow, type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
+  type FactRow, type MissionEvent, type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
 } from "@dr/shared";
 import {
   RawTreeClient, RawTreeEventLog, RawTreeLoader, RawTreeSink, applyEvent, applyRow, emptyProjection, restoreFromEvents, totalRows,
@@ -75,6 +75,8 @@ export type ActorOptions = {
   /** bounded polling before exposing reconciliationStatus=blocked */
   reconcile?: { polls: number; intervalMs: number };
   statusUrl?: () => Promise<string> | string;
+  /** how long appendEvent polls a pending append's lookup before declaring the mission suspended (default 3000) */
+  pendingResolveMs?: number;
   /** write a mission_checkpoints row after each commitment outcome (default true for the RawTree log) */
   checkpoints?: boolean;
 };
@@ -146,7 +148,45 @@ export class MissionActor {
 
   revision(missionId: string): number { return this.events.watermark(missionId); }
 
+  /**
+   * CONTRACTS §4 steps 4–6 / S10: a parent-retained pending append (ambiguous ack, e.g. an insert timeout) is resolved
+   * by its original id/hash before any new revision. The lookup is polled for ~3 s so an insert that lands late is
+   * found (each storage resolve re-sends the identical insert at most once; replay dedupes identical copies).
+   * Returns the resolved event, or throws AckError while it stays unresolved (the mission stays suspended).
+   */
+  private async settlePending(m: Mission): Promise<MissionEvent | null> {
+    const pend = this.events.pending(m.run_id);
+    if (!pend) return null;
+    const deadline = Date.now() + (this.opts.pendingResolveMs ?? 3000);
+    for (;;) {
+      let r: "none" | "resolved" | "blocked";
+      try { r = await this.events.resolvePending(m.run_id); } catch { r = "blocked"; }
+      if (r !== "blocked") {
+        this.log(`pending append ${pend.event.eventId} (rev ${pend.event.revision}, ${pend.event.type}) ${r === "resolved" ? "resolved by original id/hash" : "already settled"}`, m.arm, m.run_id);
+        if (r === "resolved") {
+          await this.afterEvent(m, pend.event);
+          this.publish("worker", { kind: "event", type: pend.event.type, revision: pend.event.revision }, { run_id: m.run_id, arm: m.arm });
+        }
+        return pend.event;
+      }
+      if (Date.now() >= deadline) {
+        this.rawtreeOk = false;
+        throw new AckError(`pending append ${pend.event.eventId} (rev ${pend.event.revision}) unresolved; mission suspended until it resolves`);
+      }
+      await sleep(500);
+    }
+  }
+
   private async appendEvent(m: Mission, type: EventType, payload: Record<string, unknown>, commandId?: string): Promise<number> {
+    const settled = await this.settlePending(m);
+    // The resolved event may be exactly this append retried (the runner's Journal resends the identical row after a
+    // 503; a caller retries the same command): reuse its revision instead of writing a duplicate event.
+    if (settled && settled.type === type && settled.payloadHash === hashPayload(payload) && settled.revision === this.events.watermark(m.run_id)) {
+      this.rawtreeOk = true;
+      m.updatedAt = settled.writtenAt;
+      return settled.revision;
+    }
+    if (settled) this.log(`pending event rev ${settled.revision} (${settled.type}) was durable after an ambiguous ack; its caller saw a failure and may retry`, m.arm, m.run_id);
     const ev = makeEvent({
       missionId: m.run_id, batchId: m.meta.batchId, arm: m.arm, revision: this.events.watermark(m.run_id) + 1,
       commandId: commandId ?? null, epoch: m.generation, type, payload,
