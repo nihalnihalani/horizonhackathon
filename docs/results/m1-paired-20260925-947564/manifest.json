@@ -1,0 +1,77 @@
+{
+  "batch_id": "m1-paired-20260925-947564",
+  "created_at": "2026-09-25T21:52:27.678Z",
+  "code_revision": "1550f112bde31bb98f004390624bc5b401fb4abb",
+  "comparable": true,
+  "comparability_reasons": [],
+  "dr": {
+    "batch_id": "m1-paired-20260925-947564",
+    "created_at": "2026-09-25T21:52:27.638Z",
+    "code_revision": "1550f112bde31bb98f004390624bc5b401fb4abb",
+    "fixture": {
+      "name": "M1",
+      "version": "m1-v1",
+      "sha256": "a63ebb18f6fcc47a252e2695467eded77ba51af1c1aaa88b3627dc1c8e5775ba"
+    },
+    "planner_input_cap": 6000,
+    "summary_cap_tokens": 800,
+    "tools": [
+      "book",
+      "cancel",
+      "keep",
+      "block"
+    ],
+    "safety_rules": [
+      "desk-idempotent",
+      "context-composer-validator",
+      "planner-candidate-revalidation"
+    ],
+    "crash_schedule": [],
+    "arms": [
+      {
+        "arm": "dr",
+        "policy_version": "dr-context-v1",
+        "mode": "live",
+        "planner_model": "gpt-5.5-2026-04-23",
+        "curator_or_summarizer_model": "LiquidAI/LFM2.5-1.2B-Instruct-GGUF",
+        "prompt_hashes": {}
+      }
+    ]
+  },
+  "baseline": {
+    "batch_id": "m1-paired-20260925-947564",
+    "created_at": "2026-09-25T21:52:27.663Z",
+    "code_revision": "1550f112bde31bb98f004390624bc5b401fb4abb",
+    "fixture": {
+      "name": "M1",
+      "version": "m1-v1",
+      "sha256": "a63ebb18f6fcc47a252e2695467eded77ba51af1c1aaa88b3627dc1c8e5775ba"
+    },
+    "planner_input_cap": 6000,
+    "summary_cap_tokens": 800,
+    "tools": [
+      "book",
+      "cancel",
+      "keep",
+      "block"
+    ],
+    "safety_rules": [
+      "desk-idempotent",
+      "context-composer-validator",
+      "planner-candidate-revalidation"
+    ],
+    "crash_schedule": [],
+    "arms": [
+      {
+        "arm": "baseline",
+        "policy_version": "checkpoint-summary-v1",
+        "mode": "live",
+        "planner_model": "gpt-5.5-2026-04-23",
+        "curator_or_summarizer_model": "gpt-5.5-2026-04-23",
+        "prompt_hashes": {
+          "summary_prompt": "23cdd03e7e4364ce97956f4e74caebf77df33cabc817d049af140dad1e9beb4c"
+        }
+      }
+    ]
+  }
+}

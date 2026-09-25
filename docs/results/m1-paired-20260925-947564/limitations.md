@@ -1,0 +1,4 @@
+- C06 MET: ok
+- C07 MET: ok
+- Single M1 run per arm; no repeated-batch statistics (sample size 1). Not a claim of days-long or continuous multi-mission reliability.
+- Both arms share one EvidenceRegistry and canonical world ledger (bench/world.ts); no live desk/kernel/control process is exercised by this bench.

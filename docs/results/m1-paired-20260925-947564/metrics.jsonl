@@ -1,0 +1,21 @@
+{"arm":"dr","round":1,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":1130,"note":"proposed_by=liquid"}
+{"arm":"dr","round":2,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":1233,"note":"proposed_by=liquid"}
+{"arm":"dr","round":3,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":1015,"note":"proposed_by=liquid"}
+{"arm":"dr","round":4,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":916,"note":"proposed_by=liquid"}
+{"arm":"dr","round":5,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":1057,"note":"proposed_by=liquid"}
+{"arm":"dr","round":6,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":738,"note":"proposed_by=liquid"}
+{"arm":"dr","round":7,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":571,"note":"proposed_by=liquid"}
+{"arm":"dr","round":8,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":767,"note":"proposed_by=liquid"}
+{"arm":"dr","round":9,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":552,"note":"proposed_by=liquid"}
+{"arm":"dr","round":10,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1002 found=true"}
+{"arm":"dr","round":11,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1008 found=true"}
+{"arm":"dr","round":12,"kind":"curator","mode":"live","model":"LiquidAI/LFM2.5-1.2B-Instruct-GGUF","latency_ms":400,"note":"proposed_by=liquid"}
+{"arm":"baseline","round":4,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":7124,"input_tokens":1062,"output_tokens":666,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":5,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":8553,"input_tokens":2588,"output_tokens":1003,"note":"summarized 2 evicted observation(s)"}
+{"arm":"baseline","round":6,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":8487,"input_tokens":1818,"output_tokens":1024,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":7,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":8001,"input_tokens":1837,"output_tokens":1024,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":8,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":8897,"input_tokens":2711,"output_tokens":1024,"note":"summarized 2 evicted observation(s)"}
+{"arm":"baseline","round":9,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":8863,"input_tokens":1830,"output_tokens":1024,"note":"summarized 1 evicted observation(s)"}
+{"arm":"baseline","round":10,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1002 found=true"}
+{"arm":"baseline","round":11,"kind":"recall","mode":"stub","model":"n/a","latency_ms":0,"note":"obs:t-1008 found=true"}
+{"arm":"baseline","round":12,"kind":"summary","mode":"live","model":"gpt-5.5-2026-04-23","latency_ms":8164,"input_tokens":1835,"output_tokens":1024,"note":"summarized 1 evicted observation(s)"}
