@@ -31,7 +31,8 @@
     "bench:memory": "node packages/shared/bin/dr-run.mjs shared bench/memory-trace.ts",
     "demo:doctor": "node packages/shared/bin/dr-run.mjs shared scripts/doctor.ts",
     "dev:core": "node scripts/dev-core.mjs",
-    "bench:missions": "node packages/shared/bin/dr-run.mjs shared bench/run-missions.ts"
+    "bench:missions": "node packages/shared/bin/dr-run.mjs shared bench/run-missions.ts",
+    "demo:phone": "node scripts/phone-gateway.mjs"
   },
   "dependencies": {
     "@ag-ui/core": "0.0.59",

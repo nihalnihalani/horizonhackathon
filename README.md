@@ -41,3 +41,13 @@ This branch closes most of the gap to [IMPLEMENTATION_PLAN.md](docs/implementati
 - **Scripts.** `npm run dev:core`, `demo:doctor`, `check:lint`, `test:integration`, `test:recovery` (all real-subprocess recovery tests), `test:e2e` (live mission REST path) and `test:smoke:live` (fails on missing prerequisites).
 
 The naive arm now goes through the same dispatch claim. After the crash it is refused `SLOT_BUSY` on the ferry instead of double-booking. That matches VALIDATION §6: both arms keep the safety machinery, and the difference shows up as refused or stale actions and planner-input growth.
+
+### Operating the demo from a phone
+
+Control stays on 127.0.0.1. `npm run demo:phone` starts an allowlisted gateway on 127.0.0.1:4410, and a tunnel exposes only that gateway: `cloudflared tunnel --url http://127.0.0.1:4410`.
+
+- **What the gateway forwards:** `/board`, `/events`, `/scorecard` and `POST /demo/{session,reset,start,kill,world,resume}`. Every other path returns 404 and never reaches control. That includes `/internal/*`, `/missions*`, `/ag-ui` and OpenBot.
+- **Auth:** the operator buttons need the operator token. The event stream and scorecard need the HttpOnly SameSite=Strict session cookie.
+- **Brute-force limit:** a client that fails auth 10 times within a minute is blocked for 5 minutes.
+- **On the phone:** open `https://<tunnel>/board` and paste the operator token once.
+- **Afterwards:** stop the tunnel after the demo. Never tunnel 4400, 3001, 3010 or `scripts/openbot-public-proxy.mjs`.
