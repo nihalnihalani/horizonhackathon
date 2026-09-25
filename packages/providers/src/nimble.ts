@@ -1,9 +1,17 @@
-// Nimble sensor: domain health + status-page extract (THREE_HOUR_CUT §6 WP C.1).
+// Nimble sensor: domain health + status-page extract.
 // Invariants: a non-success extract NEVER becomes "closed" — it throws SourceUnverified.
-// Live finding (12:40 PT): /v2/extract returns `data.parsing: {}` for every custom parser we sent
-// (example.com, parks.ca.gov, books.toscrape.com, several parser shapes). We still send the frozen
-// NIMBLE_STATUS_PARSER, and when Nimble's parsing is empty we apply the same CSS selectors locally to
-// the HTML *Nimble retrieved* (parse_mode:"local-css", retrieval_mode stays "live").
+// Parser shape (verified live 2026-09-25): /v2/extract's `parser` is ONE parser node, not a flat
+// {field: terminal} map, and its root input is the JSON object {url, html} — not a DOM. A flat map
+// (the documented shape, also what `nimble extract run --parser` sends) and a bare
+// {type:"schema",fields} both return `data.parsing: {}`, because a CSS selector applied to that JSON
+// root matches nothing. Working request: `parse: true, parser: {type:"schema", selector:{type:"json",
+// path:"html"}, fields: NIMBLE_STATUS_PARSER}` — all 14 fields come back in data.parsing
+// (parse_mode:"nimble"). If Nimble's parsing is ever incomplete we still apply the same selectors
+// locally to the HTML *Nimble retrieved* (parse_mode:"local-css", retrieval_mode stays "live").
+// Domain health: POST /v1/domain-health/check {domains:[host]} is documented, but sdk.nimbleway.com
+// answers 404 with an empty body — byte-identical to an unknown path — for every variant tried, and
+// no published client (nimble-js 1.5.0, nimble_python 1.6.0, nimble CLI 1.5.0) ships the resource.
+// The route is not live for this key; health() reports "unavailable" and never throws.
 import { createHash } from "node:crypto";
 import {
   NIMBLE_STATUS_PARSER, NIMBLE_STATUS_FIELD_NAMES, SITE_IDS, SourceUnverified, encodeValue, parseStatusFields,
@@ -15,6 +23,16 @@ import { postJson, snippet, type FetchLike } from "./http.ts";
 export const NIMBLE_BASE_URL = "https://sdk.nimbleway.com";
 /** Sent on every status-page extract so an ngrok free tunnel serves the page, not its interstitial. */
 export const STATUS_PAGE_HEADERS = { "ngrok-skip-browser-warning": "1" } as const;
+/**
+ * The request-side parser: NIMBLE_STATUS_PARSER's 14 terminals wrapped in a schema whose selector
+ * first unwraps the `html` string from Nimble's {url, html} parse root. Without that json->html step
+ * every CSS terminal comes back empty.
+ */
+export const NIMBLE_STATUS_PARSER_REQUEST = {
+  type: "schema",
+  selector: { type: "json", path: "html" },
+  fields: NIMBLE_STATUS_PARSER,
+} as const;
 export const REQUIRED_STATUS_FIELDS = NIMBLE_STATUS_FIELD_NAMES.filter((f) => !f.endsWith("_notice"));
 
 export type ParseMode = "nimble" | "local-css";
@@ -125,7 +143,11 @@ export class NimbleSensor implements Sensor {
     try {
       const r = await postJson(this.f, "nimble-health", `${this.base}/v1/domain-health/check`, { domains: [h] }, { headers: this.auth, timeoutMs: 15_000 });
       const entry = r.json?.domains?.[0];
-      if (r.status !== 200 || !entry) return { host: h, status: "unavailable", http_status: r.status, raw: { http_status: r.status }, health_ms: Date.now() - t0 };
+      if (r.status !== 200 || !entry) {
+        // 404 with an empty body = route not deployed for this key (see header), not a site verdict.
+        const reason = r.status === 404 ? "domain-health route not available (404)" : `domain-health http ${r.status}`;
+        return { host: h, status: "unavailable", http_status: r.status, raw: { http_status: r.status, reason }, health_ms: Date.now() - t0 };
+      }
       return { host: h, status: entry.status as HealthClass, success_rate: entry.success_rate, http_status: 200, raw: entry, health_ms: Date.now() - t0 };
     } catch (e) {
       return { host: h, status: "unavailable", raw: { error: (e as Error).name }, health_ms: Date.now() - t0 };
@@ -137,7 +159,7 @@ export class NimbleSensor implements Sensor {
     let r;
     try {
       r = await postJson(this.f, "nimble-extract", `${this.base}/v2/extract`, {
-        url, render, formats: ["html", "markdown"], parse: true, parser: NIMBLE_STATUS_PARSER, headers: STATUS_PAGE_HEADERS,
+        url, render, formats: ["html", "markdown"], parse: true, parser: NIMBLE_STATUS_PARSER_REQUEST, headers: STATUS_PAGE_HEADERS,
       }, { headers: this.auth, timeoutMs: this.opts.timeoutMs ?? 60_000 });
     } catch (e) {
       throw new SourceUnverified(`nimble extract transport error: ${(e as Error).name}`);
