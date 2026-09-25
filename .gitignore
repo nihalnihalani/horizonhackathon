@@ -10,3 +10,12 @@ models/
 !/.env.example
 __pycache__/
 reference/
+# Dead Reckoning workspace
+dist/
+*.sqlite
+*.sqlite-*
+.vite/
+artifacts/
+apps/console/.env
+apps/console/node_modules/
+transcript*.json

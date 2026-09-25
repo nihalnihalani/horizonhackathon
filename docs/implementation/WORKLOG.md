@@ -106,3 +106,14 @@ Accepted/rejected/deferred findings and supporting evidence:
 ```
 
 When resuming, inspect git status and current implementations before trusting an old checklist. Preserve concurrent user changes. Do not infer that a source review or an empty/skipped test suite proves an integration works.
+
+## 2026-09-25 12:30–12:40 PT — Scaffold (Opus scaffold owner)
+
+Status: **implemented + tested (local)**. Nothing live-verified against sponsors in this slice.
+
+- Plan: applied the 15 critic must-change edits to `THREE_HOUR_CUT.md` (scaffold 12:30–12:45; integration from 12:45 on fakes with `demo:f3` gate at 1:45; `/internal/projection` ProjectionLoader contract; HOLD crash hook + `runFerryStep`; idempotent reconcile + I2b; desk routes cut now; Postgres 5433; `board.html` proof panel; AG-UI `.passthrough()`; Nimble ngrok header + version assert; Liquid `proposeContextOps` required; metric/verdict contracts; `both` arm demo; storage one-query-per-table with `RESTORE_CAPACITY`). Corrected at scaffold: status-page parser is **14** fields (plan said eleven); npm workspaces are `packages/*` only (apps/console keeps its own bun lockfile per CONTRACTS §1).
+- Built: root `package.json` (all deps hoisted; scripts at final paths via `packages/shared/bin/dr-run.mjs`, which falls back to each package's `scripts/not-implemented.ts` → exit 2), `tsconfig.base.json` (ESNext + Bundler resolution, `allowImportingTsExtensions`, noEmit — deviation from NodeNext to remove import-extension friction; tsx/vitest run sources directly), `vitest.config.ts`, `.gitignore` additions, `packages/shared` (tables, records, action-key, config, tokens, sql, sse, fixture-f3 + `fixtures/f3.json`, status-page, ports), skeletons for desk/storage/kernel/providers/control/runner.
+- SQLite choice: **better-sqlite3 ^12** — prebuilt binary installed and `select 1` worked on Node v25.8.0 first try.
+- action_key: sha256 (plan §5), not sha1 (older task text).
+- Commands: `npm install` exit 0; `npm run check:types` exit 0 (7/7 packages); `npm run test:unit` 8/8 passed; `npx tsc -p packages/shared --noEmit` exit 0; `npm run smoke:rawtree` → `NOT IMPLEMENTED` exit 2 (expected stub); `loadConfig` against real `.env` ok for storage/providers/desk/control/console-stub (values never printed).
+- Not done: tokens.test/config.test as separate files (covered inside `packages/shared/test/shared.test.ts`), no live sponsor calls.

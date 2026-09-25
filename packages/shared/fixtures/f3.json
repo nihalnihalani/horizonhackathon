@@ -1,0 +1,35 @@
+{
+  "fixture": "F3",
+  "run_id_prefix": "f3",
+  "sim_clock": "2026-10-08T09:00:00-07:00 SIMULATED",
+  "trip": { "start_date": "2026-10-09", "end_date": "2026-10-11", "party": 2, "budget_cents": 40000, "currency": "USD", "accessible_required": true },
+  "constraints": [
+    { "key": "dates", "value": { "start": "2026-10-09", "end": "2026-10-11" } },
+    { "key": "party_size", "value": 2 },
+    { "key": "budget_cents", "value": 40000 },
+    { "key": "accessible_required", "value": true }
+  ],
+  "resources": [
+    { "id": "ferry-tiburon-1009", "slot": "ferry", "price_cents": 12000, "date": "2026-10-09", "accessible": true, "status": "open" },
+    { "id": "site-A", "slot": "campsite", "price_cents": 8000, "date": "2026-10-09", "accessible": true, "status": "open", "notice": "" },
+    { "id": "site-B", "slot": "campsite", "price_cents": 6000, "date": "2026-10-09", "accessible": false, "status": "open", "notice": "" },
+    { "id": "site-C", "slot": "campsite", "price_cents": 9000, "date": "2026-10-09", "accessible": true, "status": "open", "notice": "" },
+    { "id": "permit", "slot": "permit", "price_cents": 3000, "date": "2026-10-09", "accessible": true, "status": "open" },
+    { "id": "gear", "slot": "gear", "price_cents": 4000, "date": "2026-10-09", "accessible": true, "status": "open" }
+  ],
+  "world_edits": [
+    { "world_version": 2, "site": "site-A", "status": "closed", "notice": "Storm damage" }
+  ],
+  "plan": [
+    { "step_id": "ferry", "slot": "ferry", "resource": "ferry-tiburon-1009", "depends_on": [] },
+    { "step_id": "campsite", "slot": "campsite", "resource": "site-A", "depends_on": ["site-A.status", "site-A.accessible"] },
+    { "step_id": "permit", "slot": "permit", "resource": "permit", "depends_on": [] },
+    { "step_id": "gear", "slot": "gear", "resource": "gear", "depends_on": [] }
+  ],
+  "volatile_fact_keys": ["site-A.status", "site-B.status", "site-C.status"],
+  "crash_point": "after_desk_commit",
+  "crash_step": "ferry",
+  "expected_dr": { "ferry_receipts": 1, "ferry_recovered": true, "superseded": ["site-A.status"], "rejected_candidates": { "site-B": "not_accessible" }, "campsite": "site-C", "total_cents": 28000, "verdict": "VALID" },
+  "expected_naive": { "duplicate_effects": 1, "verdict": "INVALID" },
+  "companion_f3b": { "extra_world_edit": { "site": "site-C", "status": "closed" }, "verdict": "BLOCKED", "reason": "no_accessible_site_available" }
+}

@@ -1,0 +1,39 @@
+{
+  "name": "dead-reckoning",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "check:types": "node packages/shared/bin/check-types.mjs",
+    "test:unit": "vitest run --exclude '**/*.recovery.test.ts'",
+    "test:recovery": "node packages/shared/bin/dr-run.mjs kernel packages/kernel/test/r02.recovery.test.ts --vitest",
+    "smoke:rawtree": "node packages/shared/bin/dr-run.mjs storage packages/storage/scripts/smoke-rawtree.ts",
+    "smoke:nimble": "node packages/shared/bin/dr-run.mjs providers packages/providers/scripts/smoke-nimble.ts",
+    "smoke:liquid": "node packages/shared/bin/dr-run.mjs providers packages/providers/scripts/smoke-liquid.ts",
+    "smoke:planner": "node packages/shared/bin/dr-run.mjs providers packages/providers/scripts/smoke-planner.ts",
+    "dev:desk": "node packages/shared/bin/dr-run.mjs desk packages/desk/src/server.ts",
+    "dev:control": "node packages/shared/bin/dr-run.mjs control packages/control/src/server.ts",
+    "dev:control-stub": "node packages/shared/bin/dr-run.mjs control packages/control/src/stub-server.ts",
+    "demo:f3": "node packages/shared/bin/dr-run.mjs runner scripts/demo-f3.ts",
+    "demo:naive": "node packages/shared/bin/dr-run.mjs runner scripts/demo-naive.ts",
+    "demo:numbers": "node packages/shared/bin/dr-run.mjs runner scripts/demo-numbers.ts"
+  },
+  "dependencies": {
+    "@ag-ui/core": "0.0.59",
+    "@ag-ui/encoder": "0.0.59",
+    "better-sqlite3": "^12.4.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "gpt-tokenizer": "^3.2.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.6.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}
