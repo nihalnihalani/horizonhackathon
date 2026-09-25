@@ -16,7 +16,7 @@ import {
 } from "@dr/providers";
 import { emptyProjection } from "@dr/storage";
 import { HttpProjectionLoader, HttpRowSink, emit, httpIntentGate } from "./io.ts";
-import { validateRun } from "./validator.ts";
+import { noCandidateReason, validateRun } from "./validator.ts";
 
 const { values: argv } = parseArgs({
   options: { "status-url": { type: "string" }, "sim-clock": { type: "string" }, resume: { type: "string" }, transcript: { type: "string" } },
@@ -229,7 +229,13 @@ async function runDr() {
     log(`PLANNER ${id}: ${d.action}${d.resource ? ` ${d.resource}` : ""} — ${d.reason} · context_tokens ${d.context_tokens.count} · planner_tokens_in ${d.planner_tokens_in}${rej ? ` · code-rejected ${rej}` : ""}`);
     emit("planner", { step: id, action: d.action, resource: d.resource ?? null, reason: d.reason, context_tokens: d.context_tokens.count, planner_tokens_in: d.planner_tokens_in, rejected: d.rejected_candidates, valid: d.valid_candidates });
     await j.append("metrics", { step: id, phase: "planner", context_tokens: d.context_tokens.count, planner_tokens_in: d.planner_tokens_in, curator_ms: m.curator_ms, nimble_ms: m.nimble_ms, duplicate_effects: 0, stale_actions: 0 });
-    if (d.action !== "book" || !d.resource) { await blockStep(j, id, `planner ${d.action}: ${d.reason}`); continue; }
+    if (d.action !== "book" || !d.resource) {
+      // No code-valid candidate: the block reason is the code filter's, not the model's prose (F3b).
+      const reason = d.valid_candidates.length === 0
+        ? `${noCandidateReason(ps.slot, ctx.constraints.accessible_required, d.rejected_candidates)}; planner ${d.action}`
+        : `planner ${d.action}: ${d.reason}`;
+      await blockStep(j, id, reason); continue;
+    }
     const wv = await desk.worldVersion();
     const out = await executeBooking({ journal: j, desk, log, awaitIntentVisible: httpIntentGate(link) }, stepFor(id, d.resource, wv), { holdAfterCommit: crash && id === F3.crash_step, holdMs: HOLD_MS });
     log(`DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id} $${(out.receipt.amount / 100).toFixed(2)}`);

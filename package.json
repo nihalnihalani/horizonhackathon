@@ -16,6 +16,7 @@
     "dev:control": "node packages/shared/bin/dr-run.mjs control packages/control/src/server.ts",
     "dev:control-stub": "node packages/shared/bin/dr-run.mjs control packages/control/src/stub-server.ts",
     "demo:f3": "node packages/shared/bin/dr-run.mjs runner scripts/demo-f3.ts",
+    "demo:f3b": "node packages/shared/bin/dr-run.mjs runner scripts/demo-f3.ts --variant=f3b",
     "demo:naive": "node packages/shared/bin/dr-run.mjs runner scripts/demo-naive.ts",
     "demo:numbers": "node packages/shared/bin/dr-run.mjs runner scripts/demo-numbers.ts"
   },

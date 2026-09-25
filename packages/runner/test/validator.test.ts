@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CommitmentRow, DeskClient, DeskReceipt, LookupResult, PlanStepRow, Projection } from "@dr/shared";
 import { emptyProjection } from "@dr/storage";
-import { validateRun } from "../src/validator.ts";
+import { noCandidateReason, validateRun } from "../src/validator.ts";
 
 const base = { run_id: "f3-20260925-test", ts: "2026-09-25T20:00:00Z", epoch: 1, rev: 1, arm: "dr" as const };
 function commit(key: string, slot: CommitmentRow["slot"], resource: string, status: CommitmentRow["status"] = "confirmed"): CommitmentRow {
@@ -56,5 +56,14 @@ describe("terminal validator (shared by both arms)", () => {
     const v = await validateRun(p, down);
     expect(v.verdict).toBe("BLOCKED");
     expect(v.reason).toContain("desk unavailable for 4");
+  });
+  it("BLOCKED (F3b): no accessible open campsite → campsite blocked with the code filter's reason, no campsite booked", async () => {
+    const reason = noCandidateReason("campsite", true, [{ resource: "site-A", reason: "closed" }, { resource: "site-B", reason: "not_accessible" }, { resource: "site-C", reason: "closed" }]);
+    expect(reason).toBe("no_accessible_site_available: no campsite candidate satisfies accessible=true and status=open (site-A: closed, site-B: not_accessible, site-C: closed)");
+    const p = proj([commit("k1", "ferry", "ferry-tiburon-1009")], [step("ferry", "ferry"), { ...step("campsite", "campsite", "blocked"), reason }, step("permit", "permit"), step("gear", "gear")]);
+    const v = await validateRun(p, new FakeDesk({ k1: { slot: "ferry", amount: 12000 } }));
+    expect(v.verdict).toBe("BLOCKED");
+    expect(v.reason).toBe(`campsite: blocked (${reason})`);
+    expect(v.committed.campsite).toBeUndefined();
   });
 });
