@@ -5,7 +5,9 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import type { ConfigOf, MissionMeta } from "@dr/shared";
 import { FakeRawTree } from "@dr/storage";
-import { MissionActor } from "../src/actor.ts";
+import { MissionActor, MissionStopped, RowIdentityMismatch } from "../src/actor.ts";
+import { replay } from "@dr/storage";
+import type { MissionEvent } from "@dr/shared";
 import { commandArgsHash, decideCancel, decideClaim, decideCommand, decidePause, decideResume, newMissionMeta, statusPath } from "../src/lifecycle.ts";
 import { MemoryEventLog } from "../src/memory-event-log.ts";
 import { createControlHandler, type DemoOps } from "../src/server.ts";
@@ -232,5 +234,75 @@ describe("evidence, per-mission SSE hints, desk availability", () => {
     const id = String((await call("POST", "/missions", { commandId: "cmd-desk-0001", goal: "g" })).body.missionId);
     const s = await call("GET", `/missions/${id}`);
     expect(s.body.availability).toMatchObject({ desk: "unavailable" });
+  });
+});
+
+describe("critic fixes F3, F4, F6a, F8 (actor + HTTP, no child)", () => {
+  const base = (id: string) => ({ run_id: id, arm: "dr", ts: "2026-09-26T01:02:03.000Z", epoch: 1, rev: 0 });
+  const terminal = (id: string) => ({ ...base(id), reason: "terminal", restored_rows: 0, sim_clock: "x", pid: 1, verdict: "VALID", verdict_reason: "all steps done" });
+  const intent = (id: string) => ({ ...base(id), action_key: "f".repeat(64), kind: "book", slot: "ferry", resource: "ferry-tiburon-1009", date: "2026-10-09", party: 2, args_hash: "a".repeat(64), status: "intent", receipt_id: null, reversible: false, compensates: null, reason: "step ferry" });
+
+  it("F3: after cancel, runner intent and terminal verdict rows are refused (MISSION_STOPPED); no MISSION_VALIDATED; replay says cancelled", async () => {
+    const id = String((await call("POST", "/missions", { commandId: "cmd-f3-000001", goal: "g" })).body.missionId);
+    const c = await call("POST", `/missions/${id}/cancel`, { commandId: "cmd-f3-000002", expectedRevision: events.watermark(id) });
+    expect(c.body.status).toBe("cancelled");
+    const who = { run_id: id, arm: "dr" as const };
+    await expect(actor.appendRow(who, "epochs", terminal(id))).rejects.toBeInstanceOf(MissionStopped);
+    await expect(actor.appendRow(who, "commitments", intent(id))).rejects.toBeInstanceOf(MissionStopped);
+    expect(events.list(id).some((e) => e.type === "MISSION_VALIDATED" || e.type === "INTENT_RECORDED")).toBe(false);
+    expect(replay(id, [], events.list(id), events.watermark(id)).projection.mission?.status).toBe("cancelled");
+  });
+
+  it("F3: a runner terminal epochs row is a report event (never MISSION_VALIDATED); status only via setStatus", async () => {
+    const id = String((await call("POST", "/missions", { commandId: "cmd-f3-000003", goal: "g" })).body.missionId);
+    await actor.appendRow({ run_id: id, arm: "dr" }, "epochs", terminal(id));
+    const last = events.list(id).at(-1)!;
+    expect(last.type).toBe("MISSION_STATUS_CHANGED");
+    const r = replay(id, [], events.list(id), events.watermark(id));
+    expect(r.projection.mission?.status).toBe("created");
+    expect(r.projection.epochs).toMatchObject([{ reason: "terminal", verdict: "VALID" }]);
+  });
+
+  it("F4: Journal retry of the identical row after a mirror failure reuses the acked event revision", async () => {
+    const id = String((await call("POST", "/missions", { commandId: "cmd-f4-000001", goal: "g" })).body.missionId);
+    const who = { run_id: id, arm: "dr" as const };
+    fake.failNext("commitments", "http500");
+    await expect(actor.appendRow(who, "commitments", intent(id))).rejects.toThrow();
+    const w = events.watermark(id);
+    expect(events.list(id).filter((e) => e.type === "INTENT_RECORDED")).toHaveLength(1);
+    await actor.appendRow(who, "commitments", intent(id));
+    expect(events.watermark(id)).toBe(w);
+    expect(events.list(id).filter((e) => e.type === "INTENT_RECORDED")).toHaveLength(1);
+    expect(fake.rows("commitments", id)).toHaveLength(1);
+  });
+
+  it("F6a: a create retried after a partial append failure finishes the same mission (no second mission)", async () => {
+    class FlakyLog extends MemoryEventLog {
+      n = 0; failAt = 0;
+      override async append(e: MissionEvent) { if (++this.n === this.failAt) throw new Error("injected append failure"); return super.append(e); }
+    }
+    for (const failAt of [1, 2]) {
+      const log = new FlakyLog();
+      log.failAt = failAt;
+      const a2 = new MissionActor(actor.cfg, "http://127.0.0.1:9", { events: log });
+      await expect(a2.createMission({ commandId: `cmd-f6a-${failAt}0000`, ownerId: "u", goal: "g" })).rejects.toThrow();
+      const r = await a2.createMission({ commandId: `cmd-f6a-${failAt}0000`, ownerId: "u", goal: "g" });
+      expect(r.http).toBe(201);
+      expect(a2.byId.size).toBe(1);
+      const id = String(r.body.missionId);
+      expect([...a2.byId.keys()]).toEqual([id]);
+      expect(log.list(id).map((e) => e.type)).toEqual(["MISSION_CREATED", "COMMAND_ACCEPTED"]);
+      expect(await a2.createMission({ commandId: `cmd-f6a-${failAt}0000`, ownerId: "u", goal: "g" })).toEqual(r);
+    }
+  });
+
+  it("F8: GET /missions needs a caller and is owner-filtered; actor id `operator` rejected; row identity mismatch is 403-class", async () => {
+    const mine = String((await call("POST", "/missions", { commandId: "cmd-f8-000001", goal: "g" }, { authorization: `Bearer ${I}`, "x-dr-actor-id": "user-f8" })).body.missionId);
+    expect((await call("GET", "/missions", undefined, {})).status).toBe(401);
+    const list = await call("GET", "/missions", undefined, { authorization: `Bearer ${I}`, "x-dr-actor-id": "user-f8" });
+    expect((list.body.missions as { run_id: string }[]).map((x) => x.run_id)).toEqual([mine]);
+    expect((await call("GET", "/missions", undefined, { authorization: `Bearer ${I}`, "x-dr-actor-id": "operator" })).status).toBe(401);
+    expect((await call("GET", "/missions", undefined, { authorization: `Bearer ${I}x` })).status).toBe(401);
+    await expect(actor.appendRow({ run_id: mine, arm: "dr" }, "commitments", { ...intent("f3-20260926-othr") })).rejects.toBeInstanceOf(RowIdentityMismatch);
   });
 });

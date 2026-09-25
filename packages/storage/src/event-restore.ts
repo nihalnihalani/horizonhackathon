@@ -43,6 +43,8 @@ export function applyEvent(p: Projection, e: MissionEvent): Projection {
     case "MISSION_BLOCKED":
     case "MISSION_VALIDATED": {
       // Writer payload (control actor setStatus/setReconciliation): {from, to, reason, reconciliationStatus?}.
+      // F3: a row-carrying status-type event (a runner's terminal epochs row) is a report: apply the row, never the status.
+      if (typeof payload.table === "string" && payload.row && typeof payload.row === "object") return applyRowPayload(p, payload);
       const m = mission();
       const fallback: Partial<Record<string, MissionStatus>> = { MISSION_PAUSED: "paused", MISSION_CANCELLED: "cancelled", MISSION_BLOCKED: "blocked", MISSION_VALIDATED: "valid" };
       const to = (typeof payload.to === "string" ? payload.to : typeof payload.status === "string" ? payload.status : fallback[e.type]) as MissionStatus | undefined;
@@ -80,21 +82,43 @@ export function applyEvent(p: Projection, e: MissionEvent): Projection {
       }
       return p;
     }
-    default: {
-      // Row-carrying event: payload = {table,row}; metrics are never canonical (events.ts eventTypeForRow).
-      if (typeof payload.table === "string" && payload.table !== "metrics" && payload.row && typeof payload.row === "object") {
-        const table = payload.table as Exclude<TableName, "metrics">;
-        const row = parseStoredRow(table, payload.row as Record<string, unknown>);
-        applyRow(p, table, row);
-        // A definitive commitment outcome resolves its dispatch claim (mirrors the actor's onCommitment).
-        const r = row as { action_key?: string; status?: string };
-        if (table === "commitments" && p.mission && r.action_key && ["confirmed", "rejected", "not_executed"].includes(String(r.status))) {
-          delete p.mission.claims[r.action_key];
-        }
-      }
+    case "APPROVAL_REQUESTED": {
+      // F7: approvals survive restore (actor payload {approval}); keyed by the deterministic approvalId
+      const a = payload.approval as Record<string, unknown> | undefined;
+      if (a && typeof a.approvalId === "string") approvalsOf(mission())[a.approvalId] = { ...a };
       return p;
     }
+    case "APPROVAL_DECIDED": {
+      // actor payload {approvalId, status, decidedBy?, bindingHash?, commandId}
+      const id = String(payload.approvalId ?? "");
+      const ap = approvalsOf(mission());
+      if (ap[id]) ap[id] = { ...ap[id], status: payload.status, ...(payload.decidedBy ? { decidedBy: payload.decidedBy } : {}), ...(payload.commandId ? { decisionCommandId: payload.commandId } : {}) };
+      return p;
+    }
+    default: return applyRowPayload(p, payload);
   }
+}
+
+/** Approvals are carried on the mission projection (MissionMeta has no field yet: contract request). */
+export type MissionApprovals = Record<string, Record<string, unknown>>;
+export function approvalsOf(m: NonNullable<Projection["mission"]>): MissionApprovals {
+  const x = m as NonNullable<Projection["mission"]> & { approvals?: MissionApprovals };
+  return (x.approvals ??= {});
+}
+
+/** Row-carrying event: payload = {table,row}; metrics are never canonical (events.ts eventTypeForRow). */
+function applyRowPayload(p: Projection, payload: Record<string, unknown>): Projection {
+  if (typeof payload.table === "string" && payload.table !== "metrics" && payload.row && typeof payload.row === "object") {
+    const table = payload.table as Exclude<TableName, "metrics">;
+    const row = parseStoredRow(table, payload.row as Record<string, unknown>);
+    applyRow(p, table, row);
+    // A definitive commitment outcome resolves its dispatch claim (mirrors the actor's onCommitment).
+    const r = row as { action_key?: string; status?: string };
+    if (table === "commitments" && p.mission && r.action_key && ["confirmed", "rejected", "not_executed"].includes(String(r.status))) {
+      delete p.mission.claims[r.action_key];
+    }
+  }
+  return p;
 }
 
 export type RestoreResult = {

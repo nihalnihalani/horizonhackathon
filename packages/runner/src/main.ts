@@ -17,7 +17,7 @@ import {
   renderWorkingContext, siteMap, spentCents, type CandidateX, type EvidenceItem, type NimbleObservation, type PlannerContext,
 } from "@dr/providers";
 import { emptyProjection } from "@dr/storage";
-import { HttpProjectionLoader, HttpRowSink, emit, httpClaimDispatch, httpIntentGate } from "./io.ts";
+import { HttpProjectionLoader, HttpRowSink, emit, exitAfterFlush, httpClaimDispatch, httpIntentGate } from "./io.ts";
 import { validateRun } from "./validator.ts";
 import { noCandidateReason } from "./candidates.ts";
 import { ensureInitialization, seedRun } from "./initialization.ts";
@@ -322,10 +322,16 @@ try {
   emit("started", { pid: process.pid, run_id: runId, arm });
   if (arm === "naive" || argv.resume === "transcript") await runNaive();
   else if ((await runDr()) === "stopped") log("runner stopped: dispatch refused by control (pause/cancel); no verdict");
-  process.exit(0);
+  exitAfterFlush(0);
 } catch (e) {
   const err = e as Error & { code?: string };
-  log(`RUNNER ERROR ${err.code ?? err.name}: ${err.message}`);
-  emit("error", { code: err.code ?? err.name, message: err.message });
-  process.exit(1);
+  if (err.code === "MISSION_STOPPED") {
+    log(`runner stopped: ${err.message}; no verdict`);
+    emit("stopped", { code: err.code, message: err.message });
+    exitAfterFlush(0);
+  } else {
+    log(`RUNNER ERROR ${err.code ?? err.name}: ${err.message}`);
+    emit("error", { code: err.code ?? err.name, message: err.message });
+    exitAfterFlush(1);
+  }
 }

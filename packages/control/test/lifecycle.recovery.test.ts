@@ -19,12 +19,12 @@ const servers: Server[] = [];
 const actors: MissionActor[] = [];
 const ops: DemoOps = { enabled: true, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html" };
 
-async function control(events = new MemoryEventLog()): Promise<{ actor: MissionActor; events: MemoryEventLog; url: string }> {
+async function control(events = new MemoryEventLog(), runnerMain = CHILD): Promise<{ actor: MissionActor; events: MemoryEventLog; url: string }> {
   let handler: (req: IncomingMessage, res: ServerResponse) => void = (_q, s) => { s.writeHead(503).end(); };
   const server = createServer((q, s) => handler(q, s));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  const actor = new MissionActor(cfg, url, { events, runnerMain: CHILD, reconcile: { polls: 2, intervalMs: 100 } });
+  const actor = new MissionActor(cfg, url, { events, runnerMain, reconcile: { polls: 2, intervalMs: 100 } });
   handler = createControlHandler({ actor, cfg, ops });
   servers.push(server); actors.push(actor);
   return { actor, events, url };
@@ -159,6 +159,9 @@ describe("R11: pause, runner exit, absent lookup, explicit Resume", () => {
     await actor.kill(true);
     const p = await stop(actor, id, "pause");
     expect(p.body.status).toBe("pausing");
+    // F5: Resume while the lookup-only poller runs is refused, not raced
+    const early = await resume(actor, id);
+    expect(early.body.code).toBe("RECONCILING");
     await waitFor(() => m().meta.reconciliationStatus === "blocked", 10_000, "reconciliation blocked");
     await new Promise((r) => setTimeout(r, 300));
     expect(desk.store.ledger({ run_id: id }).requests).toHaveLength(0);
@@ -174,6 +177,9 @@ describe("R11: pause, runner exit, absent lookup, explicit Resume", () => {
     expect(l.outcomes).toMatchObject([{ action_key: key, committed: true }]);
     const statuses = fake.rows("commitments", id).filter((x) => x.action_key === key).map((x) => x.status);
     expect(statuses).toEqual(["intent", "unknown", "not_executed", "intent", "confirmed"]);
+    // F5: once the claim resolves, reconciliation returns to none and the stale block reason is cleared
+    expect(m().meta.reconciliationStatus).toBe("none");
+    expect(m().meta.blockedReason).toBeNull();
   });
 });
 
@@ -293,6 +299,20 @@ describe("F2: kill after_intent → operator world edit while stopped → Resume
       assertStatusChain(events, id);
     } finally {
       desk.store.editWorld("site-A", "open", "");
+    }
+  });
+});
+
+describe("F6b: verdict line written just before exit", () => {
+  it("exit bookkeeping waits for stdout to drain, so the verdict is never lost", async () => {
+    const { actor, events } = await control(new MemoryEventLog(), resolve(REPO_ROOT, "packages/control/test/fixtures/verdict-child.ts"));
+    for (let i = 0; i < 3; i++) {
+      const { id, m } = await prepared(actor, null, 1);
+      await resume(actor, id);
+      await m().exited;
+      expect(m().verdict?.verdict).toBe("VALID");
+      await waitFor(() => m().meta.status === "valid", 5_000, "valid");
+      assertStatusChain(events, id);
     }
   });
 });

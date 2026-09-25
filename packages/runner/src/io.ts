@@ -1,6 +1,9 @@
 // Runner ↔ control plumbing. The runner never holds RawTree credentials: every row goes through
 // control's acked single writer (POST /internal/rows) and every restore through GET /internal/projection.
-import { AckError, type Projection, type ProjectionLoader, type RowSink, type TableName } from "@dr/shared";
+import { AckError, DrError, type Projection, type ProjectionLoader, type RowSink, type TableName } from "@dr/shared";
+
+/** F3: control refused the row because the mission stopped (cancel/pause/terminal). The runner stops, exit 0. */
+export class RunnerStopped extends DrError { constructor(m: string) { super("MISSION_STOPPED", m); } }
 
 export type ControlLink = { baseUrl: string; token: string };
 
@@ -15,7 +18,8 @@ export class HttpRowSink implements RowSink {
     } catch (e) {
       throw new AckError(`control /internal/rows unreachable (${(e as Error).name})`);
     }
-    const j = (await res.json().catch(() => null)) as { inserted?: number; error?: string } | null;
+    const j = (await res.json().catch(() => null)) as { inserted?: number; error?: string; code?: string } | null;
+    if (res.status === 409 && j?.code === "MISSION_STOPPED") throw new RunnerStopped(`${table}: ${j.error ?? "mission stopped"}`);
     if (res.status !== 200 || j?.inserted !== 1) throw new AckError(`${table}: control did not ack (HTTP ${res.status} ${j?.error ?? ""})`);
     return { inserted: 1 };
   }
@@ -57,4 +61,12 @@ export function httpClaimDispatch(c: ControlLink, epoch: number) {
     if (res.status === 200 && j?.granted && j.dispatchId) return { granted: true, dispatchId: j.dispatchId };
     return { granted: false, code: j?.code ?? `HTTP_${res.status}`, reason: j?.message ?? "refused" };
   };
+}
+
+/**
+ * F6b: stdout to a pipe is asynchronous on macOS; process.exit() can drop the queued verdict line. Exit only after
+ * every earlier write has been flushed (an empty write's callback runs after all prior chunks).
+ */
+export function exitAfterFlush(code: number): void {
+  process.stdout.write("", () => process.stderr.write("", () => process.exit(code)));
 }

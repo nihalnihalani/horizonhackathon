@@ -9,7 +9,8 @@ import { z } from "zod";
 import { CrashPoint, Slot, loadConfig, type ApiError, type Arm, type ConfigOf } from "@dr/shared";
 import { createAgUiHandler } from "./ag-ui/handler";
 import { RawTreeClient, RawTreeEventLog } from "@dr/storage";
-import { MissionActor, type CommandResult } from "./actor.ts";
+import { MissionActor, MissionStopped, RowIdentityMismatch, type CommandResult } from "./actor.ts";
+import { timingSafeEqual } from "node:crypto";
 import { createMissionPort, statusMarkdown } from "./mission-port.ts";
 
 const HOST = "127.0.0.1";
@@ -95,6 +96,12 @@ function parse<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, b: unknown): T {
   if (!r.success) throw new BadRequest(`invalid request: ${r.error.issues.map((i) => `${i.path.join(".") || "body"} ${i.message}`).join("; ")}`);
   return r.data;
 }
+/** F8: constant-time token comparison (length leak only). */
+function safeEqual(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && timingSafeEqual(x, y);
+}
 const bearer = (req: IncomingMessage) => (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
 const send = (res: ServerResponse, r: CommandResult) => json(res, r.http, r.body);
 
@@ -109,11 +116,12 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
    */
   function caller(req: IncomingMessage): { ownerId: string; admin: boolean } | null {
     const tok = bearer(req);
-    if (tok && tok === cfg.DR_INTERNAL_TOKEN) {
+    if (safeEqual(tok, cfg.DR_INTERNAL_TOKEN)) {
       const id = req.headers["x-dr-actor-id"];
-      return typeof id === "string" && /^[A-Za-z0-9._:@-]{1,128}$/.test(id) ? { ownerId: id, admin: false } : null;
+      // F8: "operator" is reserved for the operator token; an OpenBot actor id can never alias it
+      return typeof id === "string" && id !== "operator" && /^[A-Za-z0-9._:@-]{1,128}$/.test(id) ? { ownerId: id, admin: false } : null;
     }
-    if (tok && tok === cfg.DR_OPERATOR_TOKEN) return { ownerId: "operator", admin: true };
+    if (safeEqual(tok, cfg.DR_OPERATOR_TOKEN)) return { ownerId: "operator", admin: true };
     return null;
   }
 
@@ -141,6 +149,8 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
         const b = await body(req);
         try { return json(res, 200, await actor.appendRow(who, String(b.table), b.row as Record<string, unknown>)); } catch (e) {
           actor.log(`single writer: append REFUSED (${(e as Error).message})`, who.arm, who.run_id);
+          if (e instanceof MissionStopped) return json(res, 409, { error: e.message, code: "MISSION_STOPPED", message: e.message, retryable: false });
+          if (e instanceof RowIdentityMismatch) return json(res, 403, { error: e.message, code: "FORBIDDEN", message: e.message, retryable: false });
           return json(res, 503, { error: (e as Error).message, code: "STORAGE_UNAVAILABLE" });
         }
       }
@@ -228,7 +238,12 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
     }
 
     // ---- read-only views
-    if (m === "GET" && p === "/missions") return json(res, 200, { missions: actor.snapshot() });
+    if (m === "GET" && p === "/missions") {
+      // F8: listing requires a caller; OpenBot actors see only their own missions, the operator sees all
+      const who = caller(req);
+      if (!who) return apiError(res, 401, { code: "UNAUTHORIZED", message: "internal token with x-dr-actor-id, or operator token, required", retryable: false });
+      return json(res, 200, { missions: actor.snapshot().filter((x) => who.admin || actor.byId.get(x.run_id)?.meta.ownerId === who.ownerId) });
+    }
     if (m === "GET" && p === "/status.md") { res.writeHead(200, { "content-type": "text/markdown" }); return res.end(statusMarkdown(actor)); }
     if (m === "GET" && p === "/board") {
       if (!existsSync(BOARD)) return json(res, 404, { error: "board.html not present" });
@@ -248,7 +263,7 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
     // ---- operator demo controls
     if (p.startsWith("/demo/")) {
       if (!ops.enabled) return json(res, 403, { error: "demo controls disabled", code: "FORBIDDEN" });
-      if (bearer(req) !== cfg.DR_OPERATOR_TOKEN) return json(res, 401, { error: "operator token required", code: "UNAUTHORIZED" });
+      if (!safeEqual(bearer(req), cfg.DR_OPERATOR_TOKEN)) return json(res, 401, { error: "operator token required", code: "UNAUTHORIZED" });
       const arm = p.match(/^\/demo\/([A-Za-z0-9._-]{1,64})\/arm-crash$/);
       if (arm && m === "POST") {
         const id = arm[1]!;

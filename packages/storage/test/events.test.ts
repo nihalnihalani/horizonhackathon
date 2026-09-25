@@ -4,7 +4,7 @@ import {
   canonicalJson, makeEvent, sha256Hex, toStoredEvent, type MissionEvent,
 } from "@dr/shared";
 import {
-  FakeRawTree, RawTreeClient, RawTreeEventLog, applyEvent, emptyProjection, replay, restoreFromEvents,
+  FakeRawTree, RawTreeClient, RawTreeEventLog, applyEvent, approvalsOf, emptyProjection, replay, restoreFromEvents,
   writeCheckpoint, loadCheckpoints,
 } from "../src/index.ts";
 
@@ -22,8 +22,9 @@ const rowEvent = (missionId: string, revision: number, table: string, row: Recor
 const missionCreated = (missionId: string, revision = 1): MissionEvent =>
   makeEvent({ missionId, batchId: "batch", arm: "dr", revision, epoch: 1, type: "MISSION_CREATED", payload: { ownerId: "u1", batchId: "batch", goal: "trip" } });
 
-const statusChanged = (missionId: string, revision: number, status: string): MissionEvent =>
-  makeEvent({ missionId, batchId: "batch", arm: "dr", revision, epoch: 1, type: "MISSION_STATUS_CHANGED", payload: { status } });
+// F7: the control actor's real setStatus payload shape {from, to, status, reason}
+const statusChanged = (missionId: string, revision: number, status: string, from = "created"): MissionEvent =>
+  makeEvent({ missionId, batchId: "batch", arm: "dr", revision, epoch: 1, type: "MISSION_STATUS_CHANGED", payload: { from, to: status, status, reason: null } });
 
 describe("event-log S01-S10", () => {
   it("S01: identical duplicated event applies once during restore", async () => {
@@ -53,7 +54,7 @@ describe("event-log S01-S10", () => {
     const e1 = missionCreated(run, 1);
     const e2 = statusChanged(run, 2, "queued");
     // e3 has an earlier revision-consistent slot but a much LATER wall-clock timestamp than e2 (clock skew)
-    const e3 = makeEvent({ missionId: run, batchId: "batch", arm: "dr", revision: 3, epoch: 1, type: "MISSION_STATUS_CHANGED", payload: { status: "planning" } });
+    const e3 = makeEvent({ missionId: run, batchId: "batch", arm: "dr", revision: 3, epoch: 1, type: "MISSION_STATUS_CHANGED", payload: { from: "queued", to: "planning", status: "planning", reason: null } });
     // events array deliberately out of order — restore must still follow revision order, never timestamp
     const r = replay(run, [], [e3, e1, e2], 3);
     expect(r.projection.mission?.status).toBe("planning");
@@ -183,5 +184,26 @@ describe("row-carrying events", () => {
     const e = rowEvent(run, 1, "constraints", constraintRow);
     const p = applyEvent(emptyProjection(run), e);
     expect(p.constraints.budget_cents?.value).toBe("35000");
+  });
+});
+
+describe("F3/F7: reducer follows the actor's payloads", () => {
+  it("a row-carrying status-type event (runner terminal epochs row) applies the row but never changes status", () => {
+    const run = "ev-f3a-000001";
+    const cancelled = makeEvent({ missionId: run, batchId: "batch", arm: "dr", revision: 2, epoch: 1, type: "MISSION_CANCELLED", payload: { from: "created", to: "cancelled", status: "cancelled", reason: "cancel" } });
+    const row = { run_id: run, ts: "2026-09-26T00:00:00Z", epoch: 1, rev: 1, arm: "dr", reason: "terminal", restored_rows: 0, sim_clock: "x", pid: 1, verdict: "VALID", verdict_reason: "ok" };
+    const legacyValidated = makeEvent({ missionId: run, batchId: "batch", arm: "dr", revision: 3, epoch: 1, type: "MISSION_VALIDATED", payload: { table: "epochs", row } });
+    const r = replay(run, [], [missionCreated(run), cancelled, legacyValidated], 3);
+    expect(r.projection.mission?.status).toBe("cancelled");
+    expect(r.projection.epochs).toHaveLength(1);
+  });
+
+  it("APPROVAL_REQUESTED / APPROVAL_DECIDED survive replay", () => {
+    const run = "ev-f7a-000001";
+    const approval = { approvalId: "ap-1", bindingHash: "h".repeat(64), actionKey: "k", status: "awaiting_review", planRevision: 0 };
+    const req = makeEvent({ missionId: run, batchId: "batch", arm: "dr", revision: 2, epoch: 1, type: "APPROVAL_REQUESTED", payload: { approval } });
+    const dec = makeEvent({ missionId: run, batchId: "batch", arm: "dr", revision: 3, epoch: 1, type: "APPROVAL_DECIDED", payload: { approvalId: "ap-1", status: "accepted", decidedBy: "user-1", commandId: "cmd-1" } });
+    const r = replay(run, [], [missionCreated(run), req, dec], 3);
+    expect(approvalsOf(r.projection.mission!)["ap-1"]).toMatchObject({ status: "accepted", decidedBy: "user-1", decisionCommandId: "cmd-1", bindingHash: "h".repeat(64) });
   });
 });

@@ -5,11 +5,12 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline";
+import { once } from "node:events";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   ACTIVE_STATUSES, AckError, F3, HOLD_LINE_PREFIX, REPO_ROOT, TRANSITIONS, assertRunId, buildRunnerEnv, canTransition, encodeSse, eventTypeForRow,
-  isTableName, makeEvent, newRunId, parseRow,
+  hashPayload, isTableName, makeEvent, newRunId, parseRow,
   type Arm, type CanonicalEventSink, type CommandKind, type ConfigOf, type CrashPoint, type DeskClient, type EventType,
   type FactRow, type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
 } from "@dr/shared";
@@ -52,6 +53,8 @@ export type Mission = {
   approvals: Map<string, Approval>;
   /** every facts row this control process wrote for the mission (bounded), for evidence lookup by id/version */
   factRows: FactRow[];
+  /** F4: hash/revision of the last row-carrying event, so a Journal retry after a mirror failure reuses it */
+  lastRowEvent: { hash: string; revision: number } | null;
 };
 
 export type EvidenceView = {
@@ -77,6 +80,12 @@ export type ActorOptions = {
 };
 
 type Listener = (e: SseEnvelope) => void;
+
+/** F3: the mission stopped (cancel/pause/terminal); the runner must not start new intents or claim a verdict. */
+export class MissionStopped extends Error { code = "MISSION_STOPPED"; }
+/** F8: a runner token presented a row for another run/arm. */
+export class RowIdentityMismatch extends Error { code = "FORBIDDEN"; }
+const STOPPED: readonly MissionStatus[] = ["cancelling", "cancelled", "paused", "valid", "failed"];
 const RESOLVED = new Set(["confirmed", "rejected", "not_executed"]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const STATUS_EVENT: Partial<Record<MissionStatus, EventType>> = {
@@ -88,14 +97,14 @@ export class MissionActor {
   readonly events: CanonicalEventSink;
   private sink: RawTreeSink;
   private loader: RawTreeLoader;
-  private desk: DeskClient;
+  private desk: DeskClient | null;
   private seq = 0;
   private buffer: SseEnvelope[] = [];
   private listeners = new Set<Listener>();
   private queue: Promise<unknown> = Promise.resolve();
   private revs = new Map<string, number>();
   private tokens = new Map<string, { run_id: string; arm: Arm }>();
-  private createCommands = new Map<string, { argsHash: string; result: CommandResult }>();
+  private createCommands = new Map<string, { argsHash: string; missionId: string; created: boolean; result: CommandResult | null }>();
   private rawtreeOk = true;
   private deskProbe: { ok: boolean; at: number } = { ok: true, at: 0 };
   readonly cache = new Map<string, Projection>();
@@ -109,7 +118,7 @@ export class MissionActor {
     this.sink = new RawTreeSink(this.client);
     this.loader = new RawTreeLoader(this.client);
     this.events = opts.events ?? new MemoryEventLog();
-    this.desk = opts.desk ?? new HttpDeskClient({ baseUrl: cfg.DR_WORLD_BASE_URL, token: cfg.DR_WORLD_TOKEN });
+    this.desk = opts.desk ?? null;
   }
 
   // ---------------------------------------------------------------- events
@@ -193,10 +202,17 @@ export class MissionActor {
 
   private async setReconciliation(m: Mission, status: MissionMeta["reconciliationStatus"], reason: string | null): Promise<void> {
     if (m.meta.reconciliationStatus === status) return;
-    await this.appendEvent(m, "MISSION_STATUS_CHANGED", { from: m.meta.status, to: m.meta.status, reconciliationStatus: status, reason });
+    const clear = status === "none" && m.meta.status !== "blocked"; // F5: a resolved reconciliation block leaves no stale reason
+    await this.appendEvent(m, "MISSION_STATUS_CHANGED", { from: m.meta.status, to: m.meta.status, reconciliationStatus: status, reason, ...(clear ? { blockedReason: null } : {}) });
     m.meta.reconciliationStatus = status;
     if (status === "blocked") m.meta.blockedReason = reason;
+    if (clear) m.meta.blockedReason = null;
     this.log(`mission ${m.run_id}: reconciliation ${status}${reason ? ` (${reason})` : ""}`, m.arm, m.run_id);
+  }
+
+  /** F8: control-side lookups are namespaced to the mission's run/arm (no cross-run receipt). */
+  private deskFor(m: Mission): DeskClient {
+    return this.desk ?? new HttpDeskClient({ baseUrl: this.cfg.DR_WORLD_BASE_URL, token: this.cfg.DR_WORLD_TOKEN, ns: { run_id: m.run_id, arm: m.arm } });
   }
 
   // ---------------------------------------------------------------- single writer
@@ -212,12 +228,28 @@ export class MissionActor {
 
   private async appendRowNow(who: { run_id: string; arm: Arm }, table: string, row: Record<string, unknown>): Promise<{ inserted: 1; rev: number }> {
     if (!isTableName(table)) throw new AckError(`unknown table ${table}`);
-    if (row.run_id !== who.run_id || row.arm !== who.arm) throw new AckError("row run_id/arm does not match the runner token");
+    if (row.run_id !== who.run_id || row.arm !== who.arm) throw new RowIdentityMismatch("row run_id/arm does not match the runner token");
     const rev = Math.max(this.revs.get(who.run_id) ?? 0, Number(row.rev ?? 0) - 1) + 1;
     const parsed = parseRow(table as TableName, { ...row, rev }) as Record<string, unknown>;
     const m = this.byId.get(who.run_id);
-    const type = eventTypeForRow(table as TableName, parsed);
-    if (m && type) await this.appendEvent(m, type, { table, row: parsed });
+    const terminalEpoch = table === "epochs" && parsed.reason === "terminal";
+    if (m && STOPPED.includes(m.meta.status) && ((table === "commitments" && parsed.status === "intent") || terminalEpoch)) {
+      throw new MissionStopped(`mission is ${m.meta.status}; ${terminalEpoch ? "no runner verdict" : "no new intent"} accepted`);
+    }
+    let type = eventTypeForRow(table as TableName, parsed);
+    // F3: mission status (valid/blocked) changes only through setStatus; a runner's terminal epoch row is a report
+    if (terminalEpoch && type) type = "MISSION_STATUS_CHANGED";
+    if (m && type) {
+      const payload = { table, row: parsed };
+      const hash = hashPayload(payload);
+      // F4: the Journal retries the identical row (same ts/rev) after a mirror failure: reuse the acked event
+      if (m.lastRowEvent?.hash === hash && m.lastRowEvent.revision === this.events.watermark(m.run_id)) {
+        this.log(`single writer: identical row retry reuses event rev ${m.lastRowEvent.revision}; retrying mirror only`, m.arm, m.run_id);
+      } else {
+        const revision = await this.appendEvent(m, type, payload);
+        m.lastRowEvent = { hash, revision };
+      }
+    }
     try {
       await this.sink.append(table as TableName, parsed);
       this.rawtreeOk = true;
@@ -304,7 +336,7 @@ export class MissionActor {
       arm: o.arm, run_id, generation: 0, pid: null, state: "created", token: "", statusUrl: o.statusUrl,
       transcriptPath: resolve(REPO_ROOT, `artifacts/naive/${run_id}.json`), holdLine: null, lastExit: null, verdict: null, child: null,
       exited: Promise.resolve(), meta: newMissionMeta({ missionId: run_id, ownerId: o.ownerId, batchId: o.batchId ?? run_id, goal: o.goal }),
-      updatedAt: new Date().toISOString(), reconciling: false, review: "auto", approvals: new Map(), factRows: [],
+      updatedAt: new Date().toISOString(), reconciling: false, review: "auto", approvals: new Map(), factRows: [], lastRowEvent: null,
     };
     this.byId.set(run_id, m);
     this.missions[o.arm] = m;
@@ -329,14 +361,25 @@ export class MissionActor {
       const review = o.review ?? "auto";
       const cmd: CommandInput = { commandId: o.commandId, kind: "create", args: { goal: o.goal, arm: o.arm ?? "dr", owner: o.ownerId, batchId: o.batchId ?? null, review, ...(o.args ?? {}) } };
       const hash = commandArgsHash(cmd);
-      const prior = this.createCommands.get(o.commandId);
-      if (prior) return prior.argsHash === hash ? prior.result : this.refuse({ code: "COMMAND_CONFLICT", status: 409, message: `commandId ${o.commandId} was already used with different arguments` });
-      const statusUrl = o.statusUrl ?? String(await (this.opts.statusUrl?.() ?? "http://127.0.0.1:4402/status.html"));
-      const m = this.newMission({ arm: o.arm ?? "dr", ownerId: o.ownerId, goal: o.goal, statusUrl, batchId: o.batchId });
-      m.review = review;
-      await this.appendEvent(m, "MISSION_CREATED", { missionId: m.run_id, ownerId: o.ownerId, goal: o.goal, batchId: m.meta.batchId, arm: m.arm, review }, o.commandId);
+      let entry = this.createCommands.get(o.commandId);
+      if (entry && entry.argsHash !== hash) return this.refuse({ code: "COMMAND_CONFLICT", status: 409, message: `commandId ${o.commandId} was already used with different arguments` });
+      if (entry?.result) return entry.result;
+      // F6a: the command is registered before the first append, so a retry after a partial failure finishes the SAME
+      // mission (missing MISSION_CREATED / COMMAND_ACCEPTED) instead of creating a second one.
+      let m = entry ? this.byId.get(entry.missionId)! : undefined;
+      if (!m) {
+        const statusUrl = o.statusUrl ?? String(await (this.opts.statusUrl?.() ?? "http://127.0.0.1:4402/status.html"));
+        m = this.newMission({ arm: o.arm ?? "dr", ownerId: o.ownerId, goal: o.goal, statusUrl, batchId: o.batchId });
+        m.review = review;
+        entry = { argsHash: hash, missionId: m.run_id, created: false, result: null };
+        this.createCommands.set(o.commandId, entry);
+      }
+      if (!entry!.created) {
+        await this.appendEvent(m, "MISSION_CREATED", { missionId: m.run_id, ownerId: o.ownerId, goal: o.goal, batchId: m.meta.batchId, arm: m.arm, review }, o.commandId);
+        entry!.created = true;
+      }
       const result = await this.recordCommand(m, cmd, hash, { status: "created", review }, 201);
-      this.createCommands.set(o.commandId, { argsHash: hash, result });
+      entry!.result = result;
       return result;
     });
   }
@@ -350,6 +393,9 @@ export class MissionActor {
       const hash = commandArgsHash(cmd);
       const d = decideCommand(m.meta, cmd, hash, this.revision(missionId));
       if (d.kind === "duplicate") return d.result as CommandResult;
+      // F5: the lookup-only poller owns the claimed outcome until it settles; never race it with a new generation
+      // (checked before the revision check: the poller itself advances the revision)
+      if (c.kind === "resume" && m.reconciling) return this.refuse({ code: "RECONCILING", status: 409, message: "lookup-only reconciliation in progress; retry Resume once it settles", retryable: true }, m);
       if (d.kind !== "accept") return this.refuse(d.refusal, m);
       if (c.kind === "resume") {
         const r = decideResume(m.meta, this.childActive(m));
@@ -540,7 +586,7 @@ export class MissionActor {
       await this.enqueue(() => this.setReconciliation(m, "polling", null));
       for (let i = 0; i < polls && unresolvedClaims(m.meta).length; i++) {
         for (const claim of unresolvedClaims(m.meta)) {
-          const r = await this.desk.lookup(claim.actionKey);
+          const r = await this.deskFor(m).lookup(claim.actionKey);
           this.log(`reconcile (lookup-only) ${claim.actionKey.slice(0, 12)}… → ${r.status}`, m.arm, m.run_id);
           if (r.status !== "found") continue;
           await this.enqueue(async () => {
@@ -642,14 +688,18 @@ export class MissionActor {
     createInterface({ input: child.stdout! }).on("line", (line) => this.onChildLine(m, line));
     createInterface({ input: child.stderr! }).on("line", (line) => this.log(`stderr: ${line}`, m.arm, m.run_id));
     m.exited = new Promise((res) => {
+      // F6b: exit can fire before stdout is drained; the verdict line must be parsed before exit bookkeeping
+      const drained = Promise.all([once(child.stdout!, "close"), once(child.stderr!, "close")]).catch(() => undefined);
       child.on("exit", (code, signal) => {
         m.lastExit = { pid: m.pid ?? -1, code, signal };
         m.state = signal === "SIGKILL" ? "killed" : code === 0 ? "done" : "failed";
         m.child = null;
-        this.publish("worker", { state: "exited", pid: m.pid, epoch: m.generation, code, signal }, { run_id: m.run_id, arm: m.arm });
-        this.log(`supervisor: runner pid=${m.pid} exited code=${code} signal=${signal}`, m.arm, m.run_id);
-        res();
-        void this.onExit(m);
+        void drained.then(() => {
+          this.publish("worker", { state: "exited", pid: m.pid, epoch: m.generation, code, signal }, { run_id: m.run_id, arm: m.arm });
+          this.log(`supervisor: runner pid=${m.pid} exited code=${code} signal=${signal}`, m.arm, m.run_id);
+          res();
+          void this.onExit(m);
+        });
       });
     });
     this.publish("worker", { state: "spawned", pid: m.pid, epoch: m.generation, arm: m.arm, env_keys: Object.keys(env).sort() }, { run_id: m.run_id, arm: m.arm });

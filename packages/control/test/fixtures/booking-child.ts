@@ -28,6 +28,7 @@ try {
   );
   log(`booking-child: ferry ${out.receipt.outcome} ${out.receipt.receipt_id}`);
 } catch (e) {
+  if ((e as { code?: string }).code === "MISSION_STOPPED") { log(`booking-child: stopped (MISSION_STOPPED)`); process.exit(0); }
   if (e instanceof DispatchRefused) { log(`booking-child: stopped (${e.refusal})`); process.exit(0); }
   if (e instanceof RetryArgsChanged) {
     // same handling as runner/main.ts: block the step, end with an explicit BLOCKED verdict (no resend, exit 0)
