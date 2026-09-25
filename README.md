@@ -27,3 +27,17 @@ Real: the SIGKILL (the supervisor kills the held child; a new pid resumes), RawT
 Simulated or labelled: the booking desk and the park status page are local simulations (127.0.0.1:4401/4402); the +48h clock jump is a `sim_clock` string (`SIMULATED`); Nimble parsing returns empty `data.parsing`, so the same CSS selectors are applied to the HTML Nimble fetched (`parse local-css`); Nimble domain-health returns 404 for this key and is shown as `unavailable`.
 
 The naive arm is a transcript-resume baseline, not the VALIDATION §6b competent comparator: it reloads a local transcript, does not reconcile or revalidate, derives action keys from the attempt number, and uses the same planner and the same desk. Its verdict comes from the same code validator: INVALID if any slot has two or more distinct committed desk receipts (invariant 4), if a committed campsite is not accessible, or if the total exceeds the budget; BLOCKED if a step is not done; otherwise VALID.
+
+## Full-plan branch (`full-plan`)
+
+This branch closes most of the gap to [IMPLEMENTATION_PLAN.md](docs/implementation/IMPLEMENTATION_PLAN.md). Status and evidence are in [WORKLOG.md](docs/implementation/WORKLOG.md) and [FULL_PLAN_WAVES.md](docs/implementation/FULL_PLAN_WAVES.md).
+
+- **Canonical events.** Every canonical write is first a typed `mission_events` event in RawTree (acked and query-visible), with a checkpoint after each commitment outcome. Restore is latest valid checkpoint ≤ watermark + contiguous events; gaps, conflicting duplicates and unresolved ambiguous appends block. The row tables are derived mirrors.
+- **Mission API** (Bearer `DR_INTERNAL_TOKEN` + `x-dr-actor-id`, or the operator token): `POST /missions`, `GET /missions/:id`, `POST /missions/:id/{resume,pause,cancel}` (commandId + expectedRevision), approvals, evidence and per-mission SSE. Operator-only: `POST /demo/:id/arm-crash {point}` with `after_intent | after_claim | after_desk_commit | after_receipt | desk_response_lost`.
+- **Effects.** Visible intent → actor-serialized `DISPATCH_CLAIMED` → desk POST. Cancel before the claim means no POST; a claim before cancel settles and is recorded. After a runner exit, pausing/cancelling reconciles by lookup only and never resends.
+- **OpenBot.** An authenticated proxy (`/api/dead-reckoning/missions*`) and a mission screen (`/missions/$missionId`). A service-token `verify-run` route checks the signed `forwardedProps.openbotRun`; the AG-UI check is enforced when `DR_REQUIRE_AGUI_ASSERTION=true`.
+- **`packages/task-kernel`** holds the OpenMuse-derived guard and exact-binding approvals (see `THIRD_PARTY_NOTICES.md`).
+- **Benchmark.** `npm run bench:paired -- --planner=live --curator=live` runs the frozen M1 12-round memory trace through DR and `checkpoint-summary-v1` under one manifest (B01). Results are in `docs/results/<batch>/`.
+- **Scripts.** `npm run dev:core`, `demo:doctor`, `check:lint`, `test:integration`, `test:recovery` (all real-subprocess recovery tests), `test:e2e` (live mission REST path) and `test:smoke:live` (fails on missing prerequisites).
+
+The naive arm now goes through the same dispatch claim. After the crash it is refused `SLOT_BUSY` on the ferry instead of double-booking. That matches VALIDATION §6: both arms keep the safety machinery, and the difference shows up as refused or stale actions and planner-input growth.

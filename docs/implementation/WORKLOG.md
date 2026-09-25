@@ -194,3 +194,48 @@ Status: **implemented + tested (unit) + live-verified** for findings 1, 2, 3, 4,
 - **F8 docs.** `FINAL_PROJECT.md` §6: 14→18 rows, `extract 1.5–3.7s` (domain-health unavailable), curator ~560 ms (n=3), context peak ~623/6000, "Liquid proposes… validator accepts", and the naive arm "tried closed Site A, desk rejected" (it no longer says "booked closed site"). Added an "As built" paragraph with the measured sequence and timings. Nothing was deleted.
 - Commands / exit codes: `npx vitest run --exclude '**/*.recovery.test.ts'` exit 0, **84/84** (82 + 2 new). `npm run check:types` exit 0 (7/7). `npm run test:recovery` 2/2 passed (real SIGKILL R02). I restarted control to load the fixes (both missions were `done`; the old log is in `artifacts/logs/control-pre-fix.log`). `./scripts/demo-f3.sh` exit 0, **11/11** (13:26–13:27 PT, runs f3-20260925-1089 dr / f3-20260925-f692 naive, log `artifacts/logs/demo-f3-fixer.log`). That run had: SIGKILL alive_after false; 1 DR ferry at the desk before and after; intent-without-receipt; ferry `rcpt-af8b41e3f59d` recovered=true; Nimble tasks `c86f0582-…` (v1) and `abe47a13-…` (v2); Liquid superseded, accepted, 867 ms; campsite site-C; DR VALID $280; naive INVALID (2 ferries, site-A rejected closed). Tokens: DR 528/619/442/458 vs naive 486→559→687→755→847.
 - Still open for humans: rehearse `plan my Angel Island trip` → `kill` → `close site A` → `resume` once in the OpenBot **browser** before 3:15. The desk is currently at world v1, but the plan verb resets it anyway. Control was restarted at ~13:25 and is running the fixed code.
+
+## Connectivity check — 2026-09-25T20:38:43Z (26 September 2026 IST)
+
+User-requested checks used the private root .env; no credential values were printed or copied into this log. Read the RawTree HTTP/query skill references, fetched its live OpenAPI, and inspected the pinned CopilotKit runtime 1.70.1 client source for authenticated read routes. Ran python3 /private/tmp/dr-connectivity-check.py (exit 0; individual outcomes below). The probe script reports failures as data, so exit 0 alone is not a provider success claim.
+
+| Target | Actual result |
+|---|---|
+| RawTree | HTTP 200; read-only SELECT 1 AS connectivity_ok verified in the configured database (1,143 ms). No inserts tested. |
+| Nimble | HTTP 200; one extraction of https://example.com succeeded with target HTTP 200 and nonempty markdown (2,131 ms). |
+| OpenAI | Configured model access returned HTTP 200; a Responses call on gpt-5.5-2026-04-23 completed with text (3,127 ms), store:false, 11 input / 19 output tokens. |
+| CopilotKit Intelligence | Authenticated synthetic-user thread-list read returned HTTP 200 (1,228 ms); runtime entitlement endpoint returned HTTP 200 (1,421 ms). No thread contents or subscription credentials retained. Realtime gateway TLS succeeded; authenticated WebSocket streaming was not tested. |
+| Local Liquid | Connection refused at configured 127.0.0.1:8081; model listing and generation unavailable in this check. |
+| Local control / desk / OpenBot API | Connection refused at 127.0.0.1:4400, :4401, and :3001 respectively. No services were started. |
+| OpenBot PostgreSQL | Root DATABASE_URL remains empty; database connectivity was not tested. |
+
+No RawTree writes, bookings, configuration changes, full demo, provider smoke suite or account/model changes were performed. This check establishes current hosted API connectivity, not complete application readiness. Local next steps are to configure the database and start the intended local services before repeating their health/inference checks. Existing package-lock.json edits and the remote-ahead branch were left untouched.
+
+### 2026-09-26 — Anytime worker crash controls (Codex)
+
+User requested arbitrary-time worker termination rather than only a held boundary. Preserved pre-existing `full-plan` lifecycle/auth/effect edits. Added board free-run/crash-now controls with observed exit feedback; hardened supervisor kill handle capture and early exit event ordering. Added restartable runner initialization (missing rows only) and non-active fact/candidate revalidation. See [operation and evidence](ANYTIME_CRASH_DEMO.md).
+
+Validation: initial sandbox loopback test launch failed with `listen EPERM`; rerun with permitted local listening passed. Six focused files passed 39 tests (initialization, worker kill/restart, lifecycle, effects, R01–R03); subsequently added a worker exit-order regression and reran its file: 2/2 passed, yielding 40 distinct passing focused cases. Package type checks passed; board inline JS syntax checked. No live provider calls or phone gateway deployment. Initialization failures are injected at durable writes, not real process kills; real SIGKILL tests cover free fixture workers and the existing named booking boundaries. Full live workflow arbitrary-interleaving recovery remains unproven. Provisional independent Codex review identified candidate refresh and event-order corrections, both applied; no Fable invocation or completed Fable gate is claimed.
+
+## 2026-09-25 14:22–15:10 PT — Full-plan completion waves on branch `full-plan` (lead Opus 5.5)
+
+User asked to build the non-cut parts of IMPLEMENTATION_PLAN.md with an agent team, a devil's advocate and pushes. Decision: branch `full-plan` (main stays recording-safe), demo-visible items first. Architecture decision and ownership: [FULL_PLAN_WAVES.md](FULL_PLAN_WAVES.md).
+
+Team (requested → resolved via Agent tool aliases, so exact pinned IDs could not be forced): lead Opus 5.5 (`claude-opus-5-5`); builders `dr-storage-events` (sonnet alias), `dr-control-lifecycle` (opus alias, delegated A area), `dr-console` (sonnet), `dr-bench` (sonnet); `dr-critic` (fable alias, read-only Plan agent, which may have resolved to Fable 5.1, not the requested Fable 5). A concurrent Codex session also edited this checkout ("anytime crash controls" entry above); its files were committed separately in 4bd001a.
+
+Commits (all pushed to origin/full-plan): bc73d21 contracts · fa6911b task-kernel, notices, scripts · dfbd77b event log/checkpoints/restore · 40ce5e9 lifecycle, claims, crash points · c8d3a8e control on the durable RawTree event log · 07a05f5 test:e2e · 091c48b OpenBot verify-run, proxy, mission screen · 1550f11 + (live batch) bench · ba92297 critic F1 fix · 4bd001a Codex crash controls · 93f930c approvals/evidence/events routes, finer status, F3b.
+
+Evidence (levels per VALIDATION §1):
+- Deterministic/integration: `npm run test:unit` 157/157; `npm run test:recovery` 15/15 (real SIGKILL: R01, R02 legacy and on the durable log, R03, R06–R11, S10 through the actor, event parity); storage S01–S10 18/18; OpenBot route tests 17/17 (`bun test`); console server/app typecheck and app build; bench 18/18.
+- Live (real RawTree, OpenAI, Liquid; local desk/control): `test:e2e` f3-20260925-98f6 11/11 (BLOCKED curator_unavailable before Liquid was installed) and f3-20260925-a68a 11/11 **VALID $280** with live LFM2.5-1.2B on llama-server 127.0.0.1:8080 (Homebrew llama.cpp, weights in ~/.cache, not the repo). The status page came through the labelled direct-fetch FALLBACK because ngrok has no auth token on this machine; Nimble itself is live-verified by the smoke test.
+- Bench: m1-paired-20260925-947564, live planner + live Liquid: C06 MET, **C07 MET (live)**, B01 OK. DR max/mean planner input 3966/1163 vs checkpoint-summary-v1 5533/4992 (7 summary calls, 1 CONTEXT_CAPACITY block). Sample size 1.
+
+Devil's advocate (dr-critic on bc73d21..40ce5e9): no P0. Dispositions:
+- F1 P1 replay/live meta drift: **accepted, fixed** in ba92297, with parity tests.
+- F2 P1 RetryArgsChanged after a world edit crashes the runner: **accepted**, assigned to dr-control-lifecycle.
+- F3 P1 runner terminal row after cancel → MISSION_VALIDATED in replay: **accepted**, assigned.
+- F4–F6 P2 (mirror-failure duplicate event, resume during lookup-only poll, create retry / exit-before-stdout): **accepted**, assigned.
+- F7 P2 tests used a non-writer payload shape: **accepted** (parity tests added; S-series shape update assigned).
+- F8 P3 auth hygiene: **accepted**, cheap parts assigned.
+
+Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real RawTree `mission_events` insert timed out, and the pending append was never re-resolved, so the mission stalled (`pending append … unresolved`). The fix is assigned as top priority (resolve pending by original id before the next revision). **main is unaffected.** Not done: OpenBot browser run (no database here), F1–F6 full-mission paired fixtures with crash schedules (bench covers the M1 memory trace only), planRevision increments, approvals surviving restore.
