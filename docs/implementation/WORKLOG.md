@@ -10,6 +10,7 @@ This file begins as a truthful planning handoff. Update it during implementation
 - [x] Detailed implementation phases, contracts, validation/demo specification, and root AGENTS.md written and peer-reviewed.
 - [x] Complete devil's advocate pass by three independent reviewers; ten findings corrected in the specification and mapped to acceptance cases.
 - [x] Claude Code native-team research and proposed roster, ownership, staffing waves, launch prompts and task dependencies documented in AGENT_TEAM_PLAN.md.
+- [x] Root `.env.example` with blank credentials, documented defaults and process ownership; real environment files remain ignored.
 - [ ] Bun alignment and dependency installation.
 - [ ] OpenBot/Intelligence startup and remote agent registration.
 - [ ] RawTree live write/query/visibility smoke test for implementation.
@@ -80,6 +81,12 @@ Read-only CLI checks found version 2.1.282; `claude --help` and the `agents`, `a
 Two repository reviewers independently checked ownership/dependencies and local CLI semantics. Their review corrected the task board so D02–D04 are authored during scaffold but must pass after actor/supervisor integration, and replaced an unspecified profile-validation command with structural and effective-runtime checks. These were Codex repository review tasks, not claims that the requested Claude models executed. Native-team availability and account/model entitlement remain unverified.
 
 Both reviewers rechecked the corrections and found no remaining issue within their scopes. Documentation checks cover 76 local links/anchors across eight documents, five shell examples parsed without execution, one valid JSON block, balanced fences, sixteen unique tasks with acyclic dependencies, and references into the 52-case acceptance matrix. Obsolete routing remains absent from AGENTS.md and CLAUDE.md. No application runtime test is claimed by these documentation checks.
+
+## Environment example — 26 September 2026
+
+Added the root [.env.example](../../.env.example) from the configuration contract and pinned OpenBot source, with blank provider/service/encryption credentials, an explicitly unselected planner model, local Liquid settings, OpenBot ports/tenant/Intelligence settings and a separate optional test database. The template distinguishes the root inventory from OpenBot's own environment file and records runner secret exclusions and the loopback patch prerequisite. Updated `.gitignore` to allow only the root example, and linked it from contracts and Phase 1.5. No real environment file, credential, provider probe, runtime loader or application service was created.
+
+Validation: 29 unique assignments cover all 23 configuration-contract variables plus six verified upstream/test settings; ten sensitive fields and the planner model remain blank. Shell syntax checking (without execution), template-link checks and seven Git-ignore cases pass, including rejection of private root/service env files. A source reviewer independently checked names, defaults and secret audiences against the pinned OpenBot config/example and the DR contracts. Application startup and live provider checks remain pending.
 
 ## Per-cycle handoff template
 

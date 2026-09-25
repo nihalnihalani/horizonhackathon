@@ -6,5 +6,7 @@ models/
 *.gguf
 .env
 .env.*
+# Commit only the reviewed root template; real and service-local env files stay ignored.
+!/.env.example
 __pycache__/
 reference/

@@ -230,6 +230,8 @@ The 6,000-token planner-input target includes instructions, schemas, evidence, c
 
 ## 8. Configuration contract
 
+The root [.env.example](../../.env.example) is the checked-in configuration inventory, with blank credentials and process ownership notes. Copy it to a private root `.env` for local preparation; the planned DR loader still needs implementation. OpenBot uses its own exported `apps/console/.env`: copy only its settings and the shared `DR_INTERNAL_TOKEN`, not all provider/control secrets. The template also lists verified upstream local ports, single-user mode, trusted origin and a separate optional test database. It does not apply the required loopback code patches or create the tenant.
+
 Existing OpenBot variables retain upstream semantics:
 
 ```dotenv

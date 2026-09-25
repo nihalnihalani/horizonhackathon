@@ -104,7 +104,7 @@ The [Claude Code team plan](AGENT_TEAM_PLAN.md) maps these owners to Opus 5.5, t
 
 **P1.4 OpenMuse adaptation:** extract `TaskContext` concepts and action-binding logic with attribution. Replace `checkpoint(Partial<AgentTask>)` with a typed domain-transition submission. `guard()` checks active generation, cancellation and ownership. Record which lines/patterns came from upstream and what changed; do not leave mail/calendar or Google connection types in the DR kernel.
 
-**P1.5 Configuration/examples:** implement one config module with validated URLs/ports/budgets/model choices. Generate empty `.env.example` files and allowlist only those examples in `.gitignore`; the existing `.env.*` ignore rule currently hides them. Keep real keys ignored. Add `THIRD_PARTY_NOTICES.md` and a proposed-versus-implemented README.
+**P1.5 Configuration/examples:** implement one config module with validated URLs/ports/budgets/model choices. The root [.env.example](../../.env.example) now provides the configuration inventory with empty credentials; `.gitignore` allows only that reviewed template. During service scaffolding, add scoped examples where needed and allowlist their exact paths without exposing real `.env` files. Verify loading and the runner environment allowlist; the inventory alone does not implement them. Add `THIRD_PARTY_NOTICES.md` and a proposed-versus-implemented README.
 
 **Evidence:** manifests/typecheck pass; invalid record/transition tests pass; export SHA and license notices match; reference clones stay clean. No runtime endpoint should yet claim bookings work.
 
