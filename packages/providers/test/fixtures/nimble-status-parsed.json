@@ -1,0 +1,33 @@
+{
+ "url": "https://example-tunnel.ngrok-free.app/status.html",
+ "task_id": "11111111-2222-3333-4444-555555555555",
+ "status": "success",
+ "data": {
+  "parsing": {
+   "world_version": "2",
+   "updated_at": "2026-10-08T09:00:00-07:00",
+   "siteA_status": "closed",
+   "siteA_accessible": "yes",
+   "siteA_price": "80",
+   "siteA_notice": "Storm damage",
+   "siteB_status": "open",
+   "siteB_accessible": "no",
+   "siteB_price": "60",
+   "siteB_notice": "",
+   "siteC_status": "open",
+   "siteC_accessible": "yes",
+   "siteC_price": "90",
+   "siteC_notice": ""
+  },
+  "markdown": "# Angel Island State Park"
+ },
+ "metadata": {
+  "query_time": "2026-09-25T19:39:12.398Z",
+  "query_duration": 895,
+  "response_parameters": {
+   "input_url": "https://example-tunnel.ngrok-free.app/status.html"
+  },
+  "driver": "vx6"
+ },
+ "status_code": 200
+}

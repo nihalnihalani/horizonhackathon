@@ -1,0 +1,19 @@
+{
+ "url": "https://example-tunnel.ngrok-free.app/status.html",
+ "task_id": "66666666-7777-8888-9999-000000000000",
+ "status": "success",
+ "data": {
+  "parsing": {},
+  "html": "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>Angel Island SP — Campground Status</title></head>\n<body>\n<h1 id=\"park-name\">Angel Island State Park</h1>\n<p>World version <span id=\"world-version\">2</span> · updated <time id=\"updated-at\">2026-10-08T09:00:00-07:00</time></p>\n<table id=\"sites\">\n  <tr><th>Site</th><th>Status</th><th>Accessible</th><th>Price (USD)</th><th>Notice</th></tr>\n  <tr id=\"site-A\"><td class=\"site-id\">A</td><td class=\"status\">closed</td><td class=\"accessible\">yes</td><td class=\"price\">80</td><td class=\"notice\">Storm damage</td></tr>\n  <tr id=\"site-B\"><td class=\"site-id\">B</td><td class=\"status\">open</td><td class=\"accessible\">no</td><td class=\"price\">60</td><td class=\"notice\"></td></tr>\n  <tr id=\"site-C\"><td class=\"site-id\">C</td><td class=\"status\">open</td><td class=\"accessible\">yes</td><td class=\"price\">90</td><td class=\"notice\"></td></tr>\n</table>\n</body></html>\n",
+  "markdown": "# Angel Island State Park"
+ },
+ "metadata": {
+  "query_time": "2026-09-25T19:39:12.398Z",
+  "query_duration": 895,
+  "response_parameters": {
+   "input_url": "https://example-tunnel.ngrok-free.app/status.html"
+  },
+  "driver": "vx6"
+ },
+ "status_code": 200
+}
