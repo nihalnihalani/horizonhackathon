@@ -3,7 +3,7 @@
 import type { Arm } from "./records.ts";
 import type { TableName } from "./tables.ts";
 
-export type SseEventType = "snapshot" | "row" | "worker" | "metric" | "log";
+export type SseEventType = "snapshot" | "row" | "worker" | "metric" | "log" | "story"; // story = narrated line (control/narrator.ts)
 
 export type SseEnvelope<D = unknown> = {
   type: SseEventType;

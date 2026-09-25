@@ -5,61 +5,85 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dead Reckoning Board</title>
 <style>
-:root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e6e8ec; --mute:#8b93a3; --ok:#3ecf8e; --bad:#ff6b6b; --warn:#f5b942; --dr:#6aa9ff; --nv:#c792ea; }
+:root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e6e8ec; --mute:#8b93a3; --ok:#3ecf8e; --bad:#ff6b6b; --warn:#f5b942; --dr:#4f9dff; --nv:#ff9f43; }
 * { box-sizing:border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif; }
-header { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
-header h1 { font-size:16px; margin:0 12px 0 0; }
-header .sub { color:var(--mute); font-size:12px; margin-right:auto; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+header { padding:14px 16px 10px; border-bottom:1px solid var(--line); }
+.top { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+header h1 { font-size:17px; margin:0 12px 0 0; }
+.question { font-size:15px; margin:8px 0 2px; }
+.sub { color:var(--mute); font-size:12px; }
+.spacer { margin-left:auto; }
 button { background:#232834; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 10px; cursor:pointer; font:inherit; }
 button:hover { border-color:var(--dr); }
 button.danger { border-color:#5a2a2a; } button.danger:hover { border-color:var(--bad); }
+button .n { color:var(--mute); margin-right:4px; }
 input { background:#11141a; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; width:150px; font:inherit; }
 main { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px 16px; }
 @media (max-width: 900px) { main { grid-template-columns:1fr; } }
-section { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; min-width:0; }
-section h2 { margin:0 0 4px; font-size:15px; display:flex; gap:8px; align-items:center; }
+section { background:var(--panel); border:1px solid var(--line); border-top:3px solid var(--line); border-radius:10px; padding:12px; min-width:0; }
+section.dr { border-top-color:var(--dr); } section.naive { border-top-color:var(--nv); }
+section.wide { grid-column:1 / -1; border-top-color:var(--line); }
+section h2 { margin:0 0 2px; font-size:15px; display:flex; gap:8px; align-items:center; }
 .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
 .meta { color:var(--mute); font-size:12px; overflow-wrap:anywhere; }
 .verdict { display:inline-block; padding:2px 8px; border-radius:999px; font-weight:600; font-size:12px; }
 .VALID { background:rgba(62,207,142,.15); color:var(--ok); } .INVALID { background:rgba(255,107,107,.15); color:var(--bad); } .BLOCKED { background:rgba(245,185,66,.15); color:var(--warn); }
 table { width:100%; border-collapse:collapse; margin-top:8px; font-size:12px; }
-td, th { text-align:left; padding:4px 6px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; }
+td, th { text-align:left; padding:5px 6px; border-bottom:1px solid var(--line); overflow-wrap:anywhere; vertical-align:top; }
 th { color:var(--mute); font-weight:500; }
-.tag { font-size:11px; padding:1px 6px; border-radius:4px; background:#23324a; color:#9cc3ff; }
+.tag { font-size:11px; padding:1px 6px; border-radius:4px; background:#23324a; color:#9cc3ff; white-space:nowrap; }
 .rej { color:var(--bad); }
 .bars { margin-top:10px; }
-.bar { display:grid; grid-template-columns:110px 1fr 48px; gap:8px; align-items:center; font-size:12px; margin:3px 0; }
+.bar { display:grid; grid-template-columns:120px 1fr 48px; gap:8px; align-items:center; font-size:12px; margin:3px 0; }
 .bar .track { background:#11141a; border-radius:4px; height:12px; overflow:hidden; }
 .bar .fill { height:100%; border-radius:4px; }
-.log { margin-top:10px; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color:#b8c0cc; max-height:260px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; background:#11141a; border-radius:6px; padding:8px; }
+.story { margin-top:10px; max-height:300px; overflow:auto; background:#11141a; border-radius:6px; padding:8px 10px; }
+.story p { margin:0 0 6px; font-size:13px; }
+.hold { color:var(--warn); }
+details { margin-top:8px; } summary { cursor:pointer; color:var(--mute); font-size:12px; }
+.log { margin-top:6px; font:11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; color:#b8c0cc; max-height:220px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; background:#11141a; border-radius:6px; padding:8px; }
 .fact { margin-top:8px; font-size:12px; }
+.score td:first-child { color:var(--mute); width:28%; }
+.score th.dr { color:var(--dr); } .score th.naive { color:var(--nv); }
 footer { color:var(--mute); font-size:11px; padding:0 16px 16px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>Dead Reckoning</h1>
-  <span class="sub">Angel Island · Oct 9–11 · party 2 · $400 · wheelchair-accessible campsite · live SSE from control <span id="conn">…</span></span>
-  <input id="tok" type="password" placeholder="operator token" autocomplete="off">
-  <button onclick="op('reset')">Reset world</button>
-  <button onclick="op('start',{arm:'both',crash:true})">Start both</button>
-  <button class="danger" onclick="op('kill')">kill -9 held</button>
-  <button onclick="op('world',{site:'site-A',status:'closed',notice:'Storm damage'})">Close Site A</button>
-  <button onclick="op('resume')">Resume</button>
+  <div class="top">
+    <h1>Dead Reckoning</h1>
+    <span class="meta">live from control <span id="conn">…</span></span>
+    <span class="spacer"></span>
+    <input id="tok" type="password" placeholder="operator token" autocomplete="off">
+    <button onclick="op('reset')">Reset world</button>
+    <button onclick="op('start',{arm:'both',crash:true})"><span class="n">1</span>Start both</button>
+    <button class="danger" onclick="op('kill')"><span class="n">2</span>Crash (kill -9)</button>
+    <button onclick="op('world',{site:'site-A',status:'closed',notice:'Storm damage'})"><span class="n">3</span>Close Site A</button>
+    <button onclick="op('resume')"><span class="n">4</span>Bring back</button>
+  </div>
+  <div class="question">Can an agent crash right after paying for something, come back with no memory, and still finish the job without mistakes?</div>
+  <div class="sub">Mission: Angel Island, Oct 9–11 · 2 people · $400 budget · <b>wheelchair-accessible campsite required</b> · ferry → campsite → permit → gear. Booking desk and park page are simulated; the crash, RawTree, Nimble, Liquid and the planner are real.</div>
 </header>
 <main>
-  <section id="dr"></section>
-  <section id="naive"></section>
+  <section id="dr" class="dr"></section>
+  <section id="naive" class="naive"></section>
+  <section id="score" class="wide"><h2>Scorecard</h2><div class="meta">appears when both agents finish</div></section>
 </main>
-<footer>Fallback/proof panel served by control at /board (the integrated surface is the OpenBot chat). Token bars: planner input tokens per call (metrics.context_tokens), DR budget 6000.</footer>
+<footer>Proof panel served by control at /board (the integrated surface is the OpenBot chat). Token bars: planner input tokens per call (metrics.context_tokens); Dead Reckoning's budget is 6,000.</footer>
 <script>
-const ARMS = { dr: { name: "Dead Reckoning", color: "var(--dr)" }, naive: { name: "Naive transcript-resume baseline", color: "var(--nv)" } };
+const ARMS = {
+  dr: { name: "Dead Reckoning", color: "var(--dr)", blurb: "Keeps its state in RawTree, re-checks stale facts with Nimble, local Liquid curator trims memory." },
+  naive: { name: "Ordinary agent", color: "var(--nv)", blurb: "Resumes from its own chat transcript, the way most agents do today." },
+};
 const S = {};
-function fresh(arm, run_id) { return { run_id, pid: null, state: "-", verdict: null, receipts: {}, factA: null, tokens: [], logs: [], hold: null }; }
+function fresh(arm, run_id) { return { run_id, pid: null, state: "-", verdict: null, receipts: {}, factA: null, tokens: [], logs: [], story: [], hold: null }; }
 function A(arm, run_id) { if (!S[arm] || (run_id && S[arm].run_id !== run_id)) S[arm] = fresh(arm, run_id); return S[arm]; }
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const INTERESTING = /RESTORING|control cache|reconcile|marked stale|OBSERVE|LIQUID|PLANNER|DESK|VERDICT|HOLDING|STEP|NAIVE|ERROR|kill -9|spawned|exited/;
+const md = (s) => esc(s).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>").replace(/_([^_]+)_/g, "<i>$1</i>");
+const TECH = /RESTORING|control cache|reconcile|marked stale|OBSERVE|LIQUID|PLANNER|DESK|VERDICT|HOLDING|STEP|NAIVE|ERROR|kill -9|spawned|exited/;
+const PREFIX = /^(🔵|🟠) \*\*[^*]+\*\* /;
+const STATE = { running: "running", holding: "paused at the crash point", "killed (SIGKILL)": "crashed (kill -9)", done: "finished", failed: "failed", "-": "not started" };
 
 function onEvent(e) {
   if (e.type === "snapshot") { for (const m of e.data.missions || []) { const a = A(m.arm, m.run_id); Object.assign(a, { pid: m.pid, state: m.state, verdict: m.verdict, hold: m.hold_line }); } return; }
@@ -70,53 +94,75 @@ function onEvent(e) {
     if (d.state === "spawned") { a.pid = d.pid; a.state = "running"; a.hold = null; }
     if (d.state === "holding") { a.state = "holding"; a.hold = d.line; }
     if (d.state === "exited") a.state = d.signal === "SIGKILL" ? "killed (SIGKILL)" : d.code === 0 ? "done" : "failed";
-    if (d.kind === "verdict") a.verdict = d;
+    if (d.kind === "verdict") { a.verdict = d; loadScore(); }
+  } else if (e.type === "story") {
+    for (const ln of String(d.text || "").split("\n")) { a.story.push(ln.replace(PREFIX, "")); }
+    if (a.story.length > 80) a.story.splice(0, a.story.length - 80);
   } else if (e.type === "row" && e.table === "receipts") {
     a.receipts[d.receipt_id] = d;
   } else if (e.type === "row" && e.table === "facts" && d.key === "site-A.status") {
     a.factA = d;
   } else if (e.type === "metric" && d.phase === "planner") {
-    a.tokens.push({ label: `${d.step} · e${d.epoch}`, n: Number(d.context_tokens) });
-  } else if (e.type === "log" && INTERESTING.test(d.line || "")) {
-    a.logs.push(d.line); if (a.logs.length > 60) a.logs.shift();
+    a.tokens.push({ label: `${d.step} · after ${d.epoch > 1 ? "restart" : "start"}`, n: Number(d.context_tokens) });
+  } else if (e.type === "log" && TECH.test(d.line || "")) {
+    a.logs.push(d.line); if (a.logs.length > 80) a.logs.shift();
   }
   schedule();
 }
 let pending = false;
 function schedule() { if (!pending) { pending = true; requestAnimationFrame(() => { pending = false; render(); }); } }
+const slotName = (s) => ({ ferry: "Ferry", campsite: "Campsite", permit: "Permit", gear: "Gear" })[s] || s;
+const resName = (r) => /^site-([A-Z])$/.test(r) ? `Site ${r.slice(5)}` : r.startsWith("ferry") ? "Tiburon → Angel Island" : r;
 function render() {
   const max = Math.max(1, ...Object.values(S).flatMap((a) => a.tokens.map((t) => t.n)));
   for (const arm of ["dr", "naive"]) {
     const el = document.getElementById(arm); const a = S[arm]; const cfg = ARMS[arm];
-    if (!a) { el.innerHTML = `<h2><span class="dot" style="background:${cfg.color}"></span>${cfg.name}</h2><div class="meta">no run yet</div>`; continue; }
+    const head = `<h2><span class="dot" style="background:${cfg.color}"></span>${cfg.name} ${a && a.verdict ? `<span class="verdict ${esc(a.verdict.verdict)}">${esc(a.verdict.verdict)}</span>` : ""}</h2><div class="meta">${cfg.blurb}</div>`;
+    if (!a) { el.innerHTML = `${head}<div class="meta" style="margin-top:8px">no run yet</div>`; continue; }
     const rc = Object.values(a.receipts);
     const f = a.factA;
-    el.innerHTML = `
-      <h2><span class="dot" style="background:${cfg.color}"></span>${cfg.name} ${a.verdict ? `<span class="verdict ${esc(a.verdict.verdict)}">${esc(a.verdict.verdict)}</span>` : ""}</h2>
-      <div class="meta">run ${esc(a.run_id)} · pid ${esc(a.pid)} · ${esc(a.state)}</div>
-      ${a.hold ? `<div class="meta" style="color:var(--warn)">${esc(a.hold)}</div>` : ""}
-      ${a.verdict ? `<div class="meta">${esc(a.verdict.reason)} · duplicate_effects ${esc(a.verdict.duplicate_effects)} · stale_actions ${esc(a.verdict.stale_actions)}</div>` : ""}
-      <table><tr><th>slot</th><th>resource</th><th>outcome</th><th>receipt</th></tr>
-      ${rc.map((r) => `<tr><td>${esc(r.slot)}</td><td>${esc(r.resource)}</td><td class="${r.outcome === "rejected" ? "rej" : ""}">${esc(r.outcome)}${r.reject_reason ? ` (${esc(r.reject_reason)})` : ""}</td><td>${esc(r.receipt_id)} ${r.recovered === true || r.recovered === "true" ? '<span class="tag">RECOVERED FROM DESK</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="4" class="meta">no receipts yet</td></tr>'}
+    const openLog = el.querySelector("details")?.open;
+    el.innerHTML = `${head}
+      <div class="meta" style="margin-top:4px">${esc(STATE[a.state] || a.state)} · pid ${esc(a.pid)} · run ${esc(a.run_id)}</div>
+      <div class="story">${a.story.map((s) => `<p>${md(s)}</p>`).join("") || '<p class="meta">waiting for events…</p>'}</div>
+      <table><tr><th>booking</th><th>what</th><th>outcome</th><th>receipt</th></tr>
+      ${rc.map((r) => `<tr><td>${esc(slotName(r.slot))}</td><td>${esc(resName(r.resource))}</td><td class="${r.outcome === "rejected" ? "rej" : ""}">${esc(r.outcome)}${r.reject_reason ? ` (${esc(r.reject_reason)})` : ""}</td><td>${esc(String(r.receipt_id).replace(/^rcpt-/, "").slice(0, 8))} ${r.recovered === true || r.recovered === "true" ? '<span class="tag">RECOVERED FROM DESK</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="4" class="meta">no receipts recorded yet</td></tr>'}
       </table>
-      ${f ? `<div class="fact">site-A.status = <b>${esc(JSON.parse(f.value))}</b> <span class="meta">(${esc(f.status)}${f.nimble_request_id ? (String(f.nimble_request_id).startsWith("direct-") ? ` · <b>FALLBACK direct fetch (NOT Nimble)</b> ${esc(f.nimble_request_id)}` : ` · Nimble task ${esc(f.nimble_request_id)}`) : ""}${f.world_version ? ` · world v${esc(f.world_version)}` : ""})</span></div>` : ""}
-      <div class="bars">${a.tokens.map((t) => `<div class="bar"><span class="meta">${esc(t.label)}</span><div class="track"><div class="fill" style="width:${(100 * t.n) / max}%;background:${cfg.color}"></div></div><span>${t.n}</span></div>`).join("")}</div>
-      <div class="log">${a.logs.slice(-30).map(esc).join("\n")}</div>`;
-    const lg = el.querySelector(".log"); if (lg) lg.scrollTop = lg.scrollHeight;
+      ${f ? `<div class="fact">Site A, as this agent believes it: <b>${esc(JSON.parse(f.value))}</b> <span class="meta">(${f.nimble_request_id ? (String(f.nimble_request_id).startsWith("direct-") ? "direct fetch fallback, not Nimble" : `read via Nimble`) : "no source"}${f.world_version ? ` · page v${esc(f.world_version)}` : ""})</span></div>` : ""}
+      <div class="bars"><div class="meta">Planner context per step (tokens)</div>${a.tokens.map((t) => `<div class="bar"><span class="meta">${esc(t.label)}</span><div class="track"><div class="fill" style="width:${(100 * t.n) / max}%;background:${cfg.color}"></div></div><span>${t.n}</span></div>`).join("")}</div>
+      <details${openLog ? " open" : ""}><summary>technical log</summary><div class="log">${a.logs.slice(-40).map(esc).join("\n")}</div></details>`;
+    const st = el.querySelector(".story"); if (st) st.scrollTop = st.scrollHeight;
   }
+}
+async function loadScore() {
+  const done = ["dr", "naive"].every((k) => !S[k] || S[k].verdict);
+  if (!done) return;
+  try {
+    const j = await (await fetch("/scorecard")).json();
+    const rows = String(j.markdown || "").split("\n").filter((l) => l.startsWith("|") && !/^\|---/.test(l));
+    if (!rows.length) return;
+    const cells = (l) => l.split("|").slice(1, -1).map((c) => c.trim());
+    const [hdr, ...body] = rows;
+    const h = cells(hdr);
+    document.getElementById("score").innerHTML = `<h2>Scorecard</h2><div class="meta">Counts come from the booking desk's own ledger, not from the agents.</div>
+      <table class="score"><tr>${h.map((c, i) => `<th class="${i === 1 ? "dr" : i === 2 ? "naive" : ""}">${md(c)}</th>`).join("")}</tr>
+      ${body.map((l) => `<tr>${cells(l).map((c) => `<td>${md(c)}</td>`).join("")}</tr>`).join("")}</table>`;
+  } catch { /* scorecard is best effort */ }
 }
 async function op(path, body) {
   const t = document.getElementById("tok").value.trim();
   try { localStorage.setItem("dr-op", t); } catch {}
+  if (path === "start" || path === "reset") document.getElementById("score").innerHTML = '<h2>Scorecard</h2><div class="meta">appears when both agents finish</div>';
   const r = await fetch(`/demo/${path}`, { method: "POST", headers: { authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify(body || {}) });
-  if (!r.ok) alert(`${path}: HTTP ${r.status}`);
+  if (!r.ok) { const c = document.getElementById("conn"); c.textContent = `${path} failed: HTTP ${r.status}${r.status === 401 ? " (paste the operator token)" : ""}`; c.style.color = "var(--bad)"; }
 }
 try { document.getElementById("tok").value = localStorage.getItem("dr-op") || ""; } catch {}
 const es = new EventSource("/events");
-es.onopen = () => (document.getElementById("conn").textContent = "● connected");
+es.onopen = () => { const c = document.getElementById("conn"); c.textContent = "● connected"; c.style.color = ""; };
 es.onerror = () => (document.getElementById("conn").textContent = "○ reconnecting");
-for (const t of ["snapshot", "row", "worker", "metric", "log"]) es.addEventListener(t, (m) => onEvent(JSON.parse(m.data)));
+for (const t of ["snapshot", "row", "worker", "metric", "log", "story"]) es.addEventListener(t, (m) => onEvent(JSON.parse(m.data)));
 render();
+loadScore();
 </script>
 </body>
 </html>
