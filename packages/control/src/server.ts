@@ -6,6 +6,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, type Arm } from "@dr/shared";
 import { createAgUiHandler } from "./ag-ui/handler";
+import { requireBearer } from "./ag-ui/auth";
 import { MissionActor } from "./actor.ts";
 import { createMissionPort, statusMarkdown } from "./mission-port.ts";
 
@@ -53,7 +54,9 @@ const ops: DemoOps = {
   reset: async () => { const r = await deskAdmin("/admin/reset", {}); actor.log("operator: desk world reset to v1"); return r; },
   statusUrl: resolveStatusUrl,
 };
-const agUi = createAgUiHandler(createMissionPort(actor, ops));
+// OpenBot authenticates with the shared DR_INTERNAL_TOKEN (apps/console/.env → agents.yaml auth.bearer).
+const agUi = requireBearer(cfg.DR_INTERNAL_TOKEN, createAgUiHandler(createMissionPort(actor, ops)), (req) =>
+  console.warn(`ag-ui: 401 ${req.method} from ${req.socket.remoteAddress} (${req.headers.authorization ? "bad" : "no"} bearer, ua=${req.headers["user-agent"] ?? "-"})`));
 
 function json(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { "content-type": "application/json" });

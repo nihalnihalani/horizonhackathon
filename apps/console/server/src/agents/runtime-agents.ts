@@ -26,6 +26,8 @@ export function createRuntimeAgentLoader(
   vault?: { reader: CredentialSecretReader; encryptionKey: string },
   /** Secret for the deployment-managed Bot. Never sent to customer-owned endpoints. */
   managedAgent?: ManagedAgentConfig,
+  /** Headers the tenant package declares for its own remote agents, by id. Never persisted. */
+  packageHeaders?: ReadonlyMap<string, Record<string, string>>,
 ) {
   return async (actor: AgentActor): Promise<RegisteredAgent[]> => {
     const [active, tombstones] = await Promise.all([
@@ -50,6 +52,10 @@ export function createRuntimeAgentLoader(
           auth: authFromConfiguration(row.configuration),
         });
         if (headers) agent.headers = headers;
+      }
+      if (isRemoteAgent) {
+        const declared = packageHeaders?.get(agent.id);
+        if (declared) agent.headers = { ...agent.headers, ...declared };
       }
       /*
        * Every endpoint this deployment runs gets the token, not just the first one.
