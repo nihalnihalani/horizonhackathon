@@ -27,7 +27,11 @@ export function OperatorStatus({ mission }: { mission: MissionSnapshot }) {
   const busy = resume.isPending || pause.isPending || cancel.isPending;
   const error = resume.error ?? pause.error ?? cancel.error;
 
-  const canResume = mission.status === "blocked" || mission.status === "paused";
+  // CONTRACTS §3: Resume starts a created mission and restarts a paused/pausing, recoverably blocked, or
+  // nonterminal mission whose worker has exited; control still rejects an active worker (WORKER_ACTIVE).
+  const workerLive = ["running", "starting", "holding"].includes(mission.worker.state);
+  const canResume = ["created", "paused", "pausing", "blocked"].includes(mission.status)
+    || (!["cancelling", "cancelled", "valid", "failed"].includes(mission.status) && !workerLive);
   const canPause = !["paused", "pausing", "cancelling", "cancelled", "valid", "failed"].includes(mission.status);
   const canCancel = !["cancelling", "cancelled", "valid", "failed"].includes(mission.status);
 
