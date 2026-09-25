@@ -41,7 +41,8 @@ describe("restartable initialization", () => {
     let writes = 0;
     const sink: RowSink = { async append(_table: TableName) { writes++; return { inserted: 1 }; } };
     const j = new Journal(sink, { run_id: "f3-20260926-obsv", arm: "dr", epoch: 1 });
-    await expect(ensureInitialization(j, async () => { throw new Error("provider interrupted"); })).rejects.toThrow("provider interrupted");
+    // F5: a failed observation is reported (source_unverified), not thrown; dependent steps block, the runner continues
+    await expect(ensureInitialization(j, async () => { throw new Error("provider interrupted"); })).resolves.toEqual({ ok: false, reason: "source_unverified: provider interrupted" });
     expect(writes).toBe(8);
     await ensureInitialization(j, async () => obs);
     expect(writes).toBe(14);

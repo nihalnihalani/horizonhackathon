@@ -20,7 +20,7 @@ import { emptyProjection } from "@dr/storage";
 import { HttpProjectionLoader, HttpRowSink, emit, exitAfterFlush, httpClaimDispatch, httpIntentGate } from "./io.ts";
 import { noCandidateReason, validateRun } from "./validator.ts";
 import { preplannerBlock } from "./candidates.ts";
-import { ensureInitialization, seedRun } from "./initialization.ts";
+import { campsiteCandidatesFrom, ensureInitialization, seedRun, sourceUnverifiedReason, type SiteView } from "./initialization.ts";
 
 const { values: argv } = parseArgs({
   options: { "status-url": { type: "string" }, "sim-clock": { type: "string" }, resume: { type: "string" }, transcript: { type: "string" } },
@@ -56,13 +56,7 @@ function fixedCandidate(resource: string): CandidateX {
   const r = resourceById(resource);
   return { resource: r.id, slot: r.slot, price_cents: r.price_cents, accessible: r.accessible, status: r.status, date: r.date };
 }
-type SiteView = { status: "open" | "closed"; accessible: boolean; price_cents: number };
-function campsiteCandidates(view: Record<string, SiteView>): CandidateX[] {
-  return SITES.map((s) => {
-    const v = view[`site${s}`]!;
-    return { resource: `site-${s}`, slot: "campsite" as Slot, price_cents: v.price_cents, accessible: v.accessible, status: v.status, date: resourceById(`site-${s}`).date };
-  });
-}
+const campsiteCandidates = campsiteCandidatesFrom;
 const factVal = (p: Projection, key: string): unknown => { const f = p.facts[key]; return f ? decodeValue(f.value) : undefined; };
 function viewFromFacts(p: Projection): Record<string, SiteView> {
   const out: Record<string, SiteView> = {};
@@ -119,7 +113,8 @@ async function runDr(): Promise<"done" | "stopped"> {
   const rec = await recover({ loader, sink, desk, run_id: runId, arm, sim_clock: simClock, log });
   const j = rec.journal;
   emit("recovered", { epoch: rec.epoch, restored_rows: rec.restored_rows, reconciled: rec.reconciled, stale: rec.stale, blocked: rec.blocked_steps, pid: process.pid });
-  await ensureInitialization(j, observe);
+  const init = await ensureInitialization(j, observe);
+  if (!init.ok) log(`OBSERVE failed at initialization (${init.reason}); source-dependent steps will block, others continue`);
   let epochObs: NimbleObservation | null = null;
   let evicted: string[] = [];
 
@@ -134,9 +129,11 @@ async function runDr(): Promise<"done" | "stopped"> {
     const superseded: string[] = [];
     const evidence: EvidenceItem[] = [];
     for (const key of keys) {
-      const old = j.state.facts[key]!;
+      const old = j.state.facts[key];
       const nf = fresh.get(key);
-      if (!nf) return { ok: false, reason: `observation lacks ${key}` };
+      if (!nf) return { ok: false, reason: `source_unverified: observation lacks ${key}` };
+      // first observation after a failed initial one: nothing to compare against, record it fresh
+      if (!old) { await j.append("facts", nf); continue; }
       const newVal = decodeValue(nf.value);
       let r;
       try { r = await prov.curator.compareFact(old, { key, value: newVal, observed_at: obs.fetched_at, task_id: obs.task_id }); } catch (e) {
@@ -263,6 +260,7 @@ async function runNaive() {
   const tr = new NaiveTranscript(path);
   const t: Transcript = tr.resume(runId);
   const epoch = t.attempt;
+  let naiveSourceDown: string | null = null;
   const j = new Journal(sink, { run_id: runId, arm: "naive", epoch });
   log(`NAIVE transcript resume: attempt ${t.attempt}, ${t.lines.length - 1} transcript lines reloaded from local file; no RawTree restore, no reconcile, no revalidation`);
   emit("recovered", { epoch, restored_rows: 0, transcript_lines: t.lines.length, pid: process.pid, naive: true });
@@ -270,12 +268,20 @@ async function runNaive() {
   if (epoch === 1) {
     await seedRun(j);
     t.lines.push("user: Plan an Angel Island camping trip Oct 9–11 for 2 people, budget $400: ferry, campsite, permit, gear.");
-    const obs = await observe();
-    for (const f of factsFromObservation(obs)) await j.append("facts", f);
-    const sites = siteMap(obs.fields);
-    t.facts = Object.fromEntries(Object.entries(sites).map(([k, v]) => [k, JSON.stringify(v)]));
-    t.world_version = obs.world_version;
-    t.lines.push(`tool: status page (task ${obs.task_id}) ${JSON.stringify(sites)}`);
+    let obs: NimbleObservation | null = null;
+    try { obs = await observe(); } catch (e) {
+      if ((e as { code?: string }).code === "STORAGE_UNAVAILABLE") throw e;
+      naiveSourceDown = sourceUnverifiedReason(e);
+      log(`NAIVE observe failed (${naiveSourceDown}); transcript has no site facts`);
+      t.lines.push(`tool: status page unavailable (${naiveSourceDown})`);
+    }
+    if (obs) {
+      for (const f of factsFromObservation(obs)) await j.append("facts", f);
+      const sites = siteMap(obs.fields);
+      t.facts = Object.fromEntries(Object.entries(sites).map(([k, v]) => [k, JSON.stringify(v)]));
+      t.world_version = obs.world_version;
+      t.lines.push(`tool: status page (task ${obs.task_id}) ${JSON.stringify(sites)}`);
+    }
     t.lines.push("user: oh — one of us uses a wheelchair, the campsite must be accessible.");
     tr.save(t);
   }
@@ -286,6 +292,11 @@ async function runNaive() {
     const cands = ps.slot === "campsite"
       ? campsiteCandidates(Object.fromEntries(Object.entries(t.facts).map(([k, v]) => [k, JSON.parse(v) as SiteView])))
       : [fixedCandidate(ps.resource)];
+    if (!cands.length) {
+      // labelled naive block: its transcript holds no usable site facts (source failed or lost); never guess a site
+      await blockStep(j, id, `naive: no candidate in transcript (${naiveSourceDown ?? "site facts missing"})`);
+      continue;
+    }
     // the naive agent's working memory is its transcript only (no typed state): tokens grow with every turn
     const rendered = renderWorkingContext({ projection: emptyProjection(runId), step: id, transcript: t.lines });
     const spent = Object.values(t.steps).filter((s) => s.status === "done").reduce((a, s) => a + resourceById(s.resource).price_cents, 0);

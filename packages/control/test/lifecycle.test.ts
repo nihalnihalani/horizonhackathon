@@ -306,3 +306,75 @@ describe("critic fixes F3, F4, F6a, F8 (actor + HTTP, no child)", () => {
     await expect(actor.appendRow({ run_id: mine, arm: "dr" }, "commitments", { ...intent("f3-20260926-othr") })).rejects.toBeInstanceOf(RowIdentityMismatch);
   });
 });
+
+describe("planRevision (invariant 17 binding) + /events operator auth", () => {
+  const b = (id: string, ts: string) => ({ run_id: id, arm: "dr", ts, epoch: 1, rev: 0 });
+  const stepRow = (id: string, ts: string, over: Record<string, unknown>) => ({ ...b(id, ts), step_id: "campsite", slot: "campsite", resource: "site-A", depends_on: ["site-A.status"], commitment_key: null, status: "pending", reason: "initial plan", ...over });
+  const factRow = (id: string, ts: string, key: string, status: string) => ({ ...b(id, ts), key, value: JSON.stringify("open"), source_url: null, observed_at: ts, volatile: true, status, nimble_request_id: "t-1", world_version: 1 });
+  const metric = (id: string, ts: string) => ({ ...b(id, ts), step: "campsite", phase: "planner", context_tokens: 10, planner_tokens_in: 10, curator_ms: 0, nimble_ms: 0, duplicate_effects: 0, stale_actions: 0 });
+
+  it("bumps on repair / depended fact replaced / resource change; not on metrics, initial rows or unrelated facts; replay reproduces it", async () => {
+    const id = String((await call("POST", "/missions", { commandId: "cmd-plan-0001", goal: "g" })).body.missionId);
+    const who = { run_id: id, arm: "dr" as const };
+    const pr = () => actor.byId.get(id)!.meta.planRevision;
+    await actor.appendRow(who, "plan_steps", stepRow(id, "2026-09-26T03:00:00.000Z", {}));
+    await actor.appendRow(who, "facts", factRow(id, "2026-09-26T03:00:01.000Z", "site-A.status", "active"));
+    await actor.appendRow(who, "metrics", metric(id, "2026-09-26T03:00:02.000Z"));
+    await actor.appendRow(who, "facts", factRow(id, "2026-09-26T03:00:03.000Z", "site-B.status", "superseded")); // no step depends on it
+    expect(pr()).toBe(0);
+    await actor.appendRow(who, "facts", factRow(id, "2026-09-26T03:00:04.000Z", "site-A.status", "superseded"));
+    expect(pr()).toBe(1);
+    await actor.appendRow(who, "plan_steps", stepRow(id, "2026-09-26T03:00:05.000Z", { status: "needs_repair", reason: "depends on superseded site-A.status" }));
+    expect(pr()).toBe(2);
+    await actor.appendRow(who, "metrics", metric(id, "2026-09-26T03:00:06.000Z"));
+    await actor.appendRow(who, "plan_steps", stepRow(id, "2026-09-26T03:00:07.000Z", { status: "needs_repair", reason: "still" })); // already needs_repair
+    expect(pr()).toBe(2);
+    await actor.appendRow(who, "plan_steps", stepRow(id, "2026-09-26T03:00:08.000Z", { resource: "site-C", status: "active" }));
+    expect(pr()).toBe(3);
+    expect(replay(id, [], events.list(id), events.watermark(id)).projection.mission?.planRevision).toBe(3);
+  });
+
+  it("U04: an approval proposed at planRevision N is refused (REVISION_CONFLICT) after a repair bumps it to N+1", async () => {
+    const id = String((await call("POST", "/missions", { commandId: "cmd-plan-0002", goal: "g", review: "per_action" })).body.missionId);
+    const who = { run_id: id, arm: "dr" as const };
+    const ts = "2026-09-26T04:00:00.000Z";
+    const key = "9".repeat(64), args = "8".repeat(64);
+    await actor.appendRow(who, "plan_steps", stepRow(id, ts, { step_id: "ferry", slot: "ferry", resource: "ferry-tiburon-1009", depends_on: [] }));
+    await actor.appendRow(who, "commitments", { ...b(id, "2026-09-26T04:00:01.000Z"), action_key: key, kind: "book", slot: "ferry", resource: "ferry-tiburon-1009", date: "2026-10-09", party: 2, args_hash: args, status: "intent", receipt_id: null, reversible: false, compensates: null, reason: "step ferry" });
+    const refused = await actor.claimDispatch(who, { actionKey: key, argsHash: args, slot: "ferry", epoch: 0 });
+    expect(refused.body.code).toBe("WAITING_APPROVAL");
+    const list = await call("GET", `/missions/${id}/approvals`);
+    const ap = (list.body.approvals as { approvalId: string; bindingHash: string; planRevision: number }[])[0]!;
+    expect(ap.planRevision).toBe(0);
+    await actor.appendRow(who, "plan_steps", stepRow(id, "2026-09-26T04:00:02.000Z", { step_id: "ferry", slot: "ferry", resource: "ferry-tiburon-1009", depends_on: [], status: "needs_repair" }));
+    expect((await call("GET", `/missions/${id}/approvals`)).body.planRevision).toBe(1);
+    for (const expectedPlanRevision of [0, 1]) {
+      const d = await call("POST", `/missions/${id}/approvals/${ap.approvalId}`, { commandId: `cmd-plan-ap-${expectedPlanRevision}`, decision: "accept", displayedBindingHash: ap.bindingHash, expectedPlanRevision });
+      expect(d.status).toBe(409);
+      expect(d.body.code).toBe("REVISION_CONFLICT");
+    }
+    expect(events.list(id).some((e) => e.type === "APPROVAL_DECIDED")).toBe(false);
+  });
+
+  it("GET /events and /scorecard need the operator: 401 without; 200 with the header or the dr_op session cookie", async () => {
+    expect((await fetch(`${base}/events`)).status).toBe(401);
+    expect((await fetch(`${base}/scorecard`)).status).toBe(401);
+    expect((await fetch(`${base}/events`, { headers: { authorization: `Bearer ${I}`, "x-dr-actor-id": "user-1" } })).status).toBe(401);
+    const open = async (h: Record<string, string>) => {
+      const ac = new AbortController();
+      const r = await fetch(`${base}/events`, { headers: h, signal: ac.signal });
+      ac.abort();
+      return r.status;
+    };
+    expect(await open({ authorization: `Bearer ${O}` })).toBe(200);
+    expect((await fetch(`${base}/demo/session`, { method: "POST" })).status).toBe(401);
+    const s = await fetch(`${base}/demo/session`, { method: "POST", headers: { authorization: `Bearer ${O}` } });
+    expect(s.status).toBe(204);
+    const cookie = s.headers.get("set-cookie")!;
+    expect(cookie).toMatch(/^dr_op=[a-f0-9]{48}; HttpOnly; SameSite=Strict; Path=\//);
+    expect(cookie).not.toContain(O);
+    expect(await open({ cookie: cookie.split(";")[0]! })).toBe(200);
+    expect(await open({ cookie: `dr_op=${"0".repeat(48)}` })).toBe(401);
+    expect((await fetch(`${base}/board`)).status).not.toBe(401); // the board page itself stays open (no data)
+  });
+});

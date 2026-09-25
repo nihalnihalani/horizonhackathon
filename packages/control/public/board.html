@@ -141,7 +141,9 @@ async function loadScore() {
   const done = ["dr", "naive"].every((k) => !S[k] || S[k].verdict);
   if (!done) return;
   try {
-    const j = await (await fetch("/scorecard")).json();
+    const r = await fetch("/scorecard", { credentials: "same-origin" });
+    if (r.status === 401) { document.getElementById("conn").textContent = "○ paste the operator token"; return; }
+    const j = await r.json();
     const rows = String(j.markdown || "").split("\n").filter((l) => l.startsWith("|") && !/^\|---/.test(l));
     if (!rows.length) return;
     const cells = (l) => l.split("|").slice(1, -1).map((c) => c.trim());
@@ -152,9 +154,28 @@ async function loadScore() {
       ${body.map((l) => `<tr>${cells(l).map((c) => `<td>${md(c)}</td>`).join("")}</tr>`).join("")}</table>`;
   } catch { /* scorecard is best effort */ }
 }
+// /events and /scorecard need operator auth; EventSource cannot send headers, so the token buys an httpOnly
+// SameSite=Strict session cookie (dr_op) from POST /demo/session, then the stream is (re)opened.
+let es = null;
+async function session() {
+  const t = document.getElementById("tok").value.trim();
+  if (!t) { document.getElementById("conn").textContent = "○ paste the operator token"; return false; }
+  try { localStorage.setItem("dr-op", t); } catch {}
+  const r = await fetch("/demo/session", { method: "POST", credentials: "same-origin", headers: { authorization: `Bearer ${t}` } }).catch(() => null);
+  if (!r || !r.ok) { document.getElementById("conn").textContent = `○ session refused (${r ? `HTTP ${r.status}` : "no response"})`; return false; }
+  return true;
+}
+function openStream() {
+  if (es) es.close();
+  es = new EventSource("/events", { withCredentials: true });
+  es.onopen = () => { const c = document.getElementById("conn"); c.textContent = "● connected"; c.style.color = ""; };
+  es.onerror = () => (document.getElementById("conn").textContent = "○ reconnecting");
+  for (const t of ["snapshot", "row", "worker", "metric", "log", "story"]) es.addEventListener(t, (m) => onEvent(JSON.parse(m.data)));
+}
+async function connect() { if (await session()) { openStream(); loadScore(); } }
 async function op(path, body) {
   const t = document.getElementById("tok").value.trim();
-  try { localStorage.setItem("dr-op", t); } catch {}
+  if (!es || es.readyState === 2) await connect(); else await session();
   if (path === "start" || path === "reset") document.getElementById("score").innerHTML = '<h2>Scorecard</h2><div class="meta">appears when both agents finish</div>';
   const status = document.getElementById("operation");
   try {
@@ -172,12 +193,9 @@ async function op(path, body) {
 
 }
 try { document.getElementById("tok").value = localStorage.getItem("dr-op") || ""; } catch {}
-const es = new EventSource("/events");
-es.onopen = () => { const c = document.getElementById("conn"); c.textContent = "● connected"; c.style.color = ""; };
-es.onerror = () => (document.getElementById("conn").textContent = "○ reconnecting");
-for (const t of ["snapshot", "row", "worker", "metric", "log", "story"]) es.addEventListener(t, (m) => onEvent(JSON.parse(m.data)));
+document.getElementById("tok").addEventListener("change", () => void connect());
 render();
-loadScore();
+void connect();
 </script>
 </body>
 </html>

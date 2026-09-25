@@ -279,8 +279,13 @@ export class MissionActor {
     let type = eventTypeForRow(table as TableName, parsed);
     // F3: mission status (valid/blocked) changes only through setStatus; a runner's terminal epoch row is a report
     if (terminalEpoch && type) type = "MISSION_STATUS_CHANGED";
+    // planRevision (invariant 17 binding): bumps only when the plan or an approval-relevant dependency changes.
+    // Computed against the pre-row cache and applied to meta only after the mirror, so a Journal retry of the same row
+    // recomputes the identical payload (F4 dedupe) instead of bumping twice.
+    const planChange = m && type ? this.planChange(m, table as TableName, parsed) : null;
+    const nextPlanRevision = planChange ? m!.meta.planRevision + 1 : null;
     if (m && type) {
-      const payload = { table, row: parsed };
+      const payload = { table, row: parsed, ...(planChange ? { planRevision: nextPlanRevision, planChange } : {}) };
       const hash = hashPayload(payload);
       // F4: the Journal retries the identical row (same ts/rev) after a mirror failure: reuse the acked event
       if (m.lastRowEvent?.hash === hash && m.lastRowEvent.revision === this.events.watermark(m.run_id)) {
@@ -299,9 +304,35 @@ export class MissionActor {
     applyRow(p, table as TableName, parsed as never);
     this.cache.set(who.run_id, p);
     this.publish(table === "metrics" ? "metric" : "row", parsed, { table: table as TableName, run_id: who.run_id, arm: who.arm });
+    if (m && nextPlanRevision !== null && nextPlanRevision > m.meta.planRevision) {
+      m.meta.planRevision = nextPlanRevision;
+      this.log(`plan revision → ${nextPlanRevision} (${planChange})`, m.arm, m.run_id);
+    }
     if (m && table === "facts") { m.factRows.push(parsed as unknown as FactRow); if (m.factRows.length > 500) m.factRows.shift(); }
     if (m && table === "commitments") await this.onCommitment(m, parsed);
     return { inserted: 1 as const, rev };
+  }
+
+  /** Why this row changes the plan (→ new planRevision), or null. Metrics, heartbeats, epochs, receipts never do. */
+  private planChange(m: Mission, table: TableName, row: Record<string, unknown>): string | null {
+    const p = this.cache.get(m.run_id);
+    if (table === "plan_steps") {
+      const prev = p?.plan_steps[String(row.step_id)];
+      if (row.status === "needs_repair" && prev?.status !== "needs_repair") return `step ${row.step_id} needs_repair`;
+      if (prev?.resource && row.resource && prev.resource !== row.resource) return `step ${row.step_id} resource ${prev.resource} → ${row.resource}`;
+      return null;
+    }
+    if (table === "facts") {
+      if (row.status !== "superseded" && row.status !== "conflict") return null;
+      const key = String(row.key);
+      const depended = Object.values(p?.plan_steps ?? {}).some((s) => (s.depends_on ?? []).includes(key));
+      return depended ? `fact ${key} ${row.status}` : null;
+    }
+    if (table === "constraints") {
+      const prev = p?.constraints[String(row.key)];
+      return prev && prev.value !== row.value ? `constraint ${row.key} changed` : null;
+    }
+    return null;
   }
 
   /** A definitive outcome resolves the claim; pause/cancel complete once no claim is unresolved. */

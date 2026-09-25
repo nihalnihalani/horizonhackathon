@@ -11,7 +11,7 @@ import { CrashPoint, Slot, loadConfig, type ApiError, type Arm, type ConfigOf } 
 import { createAgUiHandler } from "./ag-ui/handler";
 import { RawTreeClient, RawTreeEventLog } from "@dr/storage";
 import { MissionActor, MissionStopped, RowIdentityMismatch, type CommandResult } from "./actor.ts";
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { requireBearer } from "./ag-ui/auth";
 import type { AgUiHandlerOptions } from "./ag-ui/handler";
 import { verifyRunAssertion } from "./auth.ts";
@@ -155,6 +155,15 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
     return null;
   }
 
+  /** Operator board sessions (POST /demo/session); process-local, lost on restart (the board re-creates one). */
+  const sessions = new Set<string>();
+  /** Read-only operator views (/events, /scorecard): operator bearer, or the dr_op session cookie. */
+  function operatorRead(req: IncomingMessage): boolean {
+    if (safeEqual(bearer(req), cfg.DR_OPERATOR_TOKEN)) return true;
+    const c = /(?:^|;\s*)dr_op=([a-f0-9]{48})(?:;|$)/.exec(req.headers.cookie ?? "");
+    return !!c && [...sessions].some((sid) => safeEqual(sid, c[1]!));
+  }
+
   /** R08: an id this process does not own may still have durable records → refuse takeover instead of 404. */
   async function unknownMission(res: ServerResponse, id: string) {
     if (await actor.mayHaveDurableRecord(id)) {
@@ -275,6 +284,9 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
       return json(res, 200, { missions: actor.snapshot().filter((x) => who.admin || actor.byId.get(x.run_id)?.meta.ownerId === who.ownerId) });
     }
     // Read-only, loopback-only view like /status.md; counts come from the desk's own ledger.
+    if ((p === "/scorecard" || p === "/events") && !operatorRead(req)) {
+      return apiError(res, 401, { code: "UNAUTHORIZED", message: "operator token (header) or operator session cookie required; POST /demo/session", retryable: false });
+    }
     if (m === "GET" && p === "/scorecard") { const results = await collectResults(actor, ops); return json(res, 200, { results, markdown: scorecard(results) }); }
     if (m === "GET" && p === "/status.md") { res.writeHead(200, { "content-type": "text/markdown" }); return res.end(statusMarkdown(actor)); }
     if (m === "GET" && p === "/board") {
@@ -296,6 +308,15 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
     if (p.startsWith("/demo/")) {
       if (!ops.enabled) return json(res, 403, { error: "demo controls disabled", code: "FORBIDDEN" });
       if (!safeEqual(bearer(req), cfg.DR_OPERATOR_TOKEN)) return json(res, 401, { error: "operator token required", code: "UNAUTHORIZED" });
+      if (p === "/demo/session" && m === "POST") {
+        // Browser session for the board: EventSource cannot send headers. The cookie holds a random per-process
+        // session id, never the operator token; httpOnly + SameSite=Strict, loopback only.
+        const sid = randomBytes(24).toString("hex");
+        sessions.add(sid);
+        while (sessions.size > 32) sessions.delete(sessions.values().next().value!); // bounded; oldest first
+        res.writeHead(204, { "set-cookie": `dr_op=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200` });
+        return res.end();
+      }
       const arm = p.match(/^\/demo\/([A-Za-z0-9._-]{1,64})\/arm-crash$/);
       if (arm && m === "POST") {
         const id = arm[1]!;

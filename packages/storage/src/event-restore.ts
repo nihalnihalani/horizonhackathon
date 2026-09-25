@@ -112,6 +112,8 @@ function applyRowPayload(p: Projection, payload: Record<string, unknown>): Proje
     const table = payload.table as Exclude<TableName, "metrics">;
     const row = parseStoredRow(table, payload.row as Record<string, unknown>);
     applyRow(p, table, row);
+    // planRevision is carried on the row event that changed the plan (control actor planChange)
+    if (p.mission && typeof payload.planRevision === "number" && payload.planRevision > p.mission.planRevision) p.mission.planRevision = payload.planRevision;
     // A definitive commitment outcome resolves its dispatch claim (mirrors the actor's onCommitment).
     const r = row as { action_key?: string; status?: string };
     if (table === "commitments" && p.mission && r.action_key && ["confirmed", "rejected", "not_executed"].includes(String(r.status))) {
