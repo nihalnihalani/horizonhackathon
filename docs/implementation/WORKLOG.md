@@ -228,3 +228,13 @@ Status: **both done, unit-tested and live-verified.** F3b ran 13/13 and F3 still
 - **F3 regression.** The first rerun (`f3-20260925-b795`/`-0107`) got **9/11**. The cause was outside interference: control.log shows an external `operator: desk world reset to v1` + `world edit site-A` at ~14:30, **mid-run**, from some other caller of /demo/reset + /demo/world. That wiped the desk ledger after DR had booked site-C, so there were 0 ferries in the ledger and a $70 total. The second rerun was uninterrupted: `./scripts/demo-f3.sh` → **11/11**. DR `f3-20260925-ab48` VALID at $280 with site-C; naive `f3-20260925-315b` INVALID (2 ferries).
 - Behaviour to know: in F3b, DR still books **permit and gear** after the campsite blocks, because both have `depends_on: []` in the fixture. The desk ends with ferry, permit and gear committed. Stopping downstream bookings after a block was not in scope.
 - Full unit suite: `npx vitest run --exclude '**/*.recovery.test.ts'` → 90/90. `npm run check:types` → 7/7 ok.
+
+## 2026-09-25 14:34–14:36 PT — OpenBot browser rehearsal of the long verbs (Opus 5.5, `claude-opus-5-5`)
+
+Status: **live-verified in the OpenBot browser** (Chrome, http://127.0.0.1:3010, Dead Reckoning channel), after `/ag-ui` began requiring the bearer token.
+
+- Typed in the chat, in order: `plan my Angel Island trip` → (both runners reached `holding`, confirmed via control `/missions`) → `kill` → `close site A` → `resume`.
+- Streamed in the chat: "Desk world reset to v1"; runs `f3-20260925-5b88` (dr) and `f3-20260925-9a43` (naive) started; `kill -9` of both pids, alive after: false; operator edit Site A → CLOSED, world v2; resume with new pids 59857/59858, `RESTORING FROM RAWTREE… 18 rows · epoch 2`, ferry `RECOVERED FROM DESK`; Nimble extract `parse nimble · world v2 · domain-health unavailable`; Liquid `site-A.status` superseded, accepted, curator_ms 814.
+- Verdicts (control `/missions`): dr **VALID** (all 4 steps, $280, duplicate_effects 0); naive **INVALID** (2 ferry receipts, Site A rejected closed, duplicate_effects 1, stale_actions 1). Context tokens dr 526/612/438/454; naive 481→550→682→738→830.
+- control.log shows no `ag-ui: 401` from OpenBot during the run; the only 401 is an earlier unauthenticated curl.
+- Screen recording exported by the browser as `openbot_dead_reckoning_plan_kill_close_resume.gif` (Downloads).
