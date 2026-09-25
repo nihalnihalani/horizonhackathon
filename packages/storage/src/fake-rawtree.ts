@@ -87,22 +87,62 @@ export class FakeRawTree {
     if (req.method === "POST" && u.pathname === "/v1/query") {
       const { sql } = JSON.parse(text) as { sql: string };
       this.queries.push(sql);
-      const q = sql.match(/^SELECT \* FROM ([a-z_]+) WHERE run_id = '([a-z0-9-]+)' ORDER BY rev, ts LIMIT (\d+)(?: OFFSET (\d+))?$/);
-      if (!q) return this.send(res, 400, { error: "fake: unsupported sql" });
-      const [, table, runId, lim, off] = q;
-      const list = this.tables.get(table!);
-      if (!list || list.length === 0) return this.send(res, 400, { error: "rawtree_error", message: "Code: 51. (EMPTY_LIST_OF_COLUMNS_QUERIED)" });
-      const cols = new Set<string>();
-      for (const x of list) for (const k of Object.keys(x.row)) cols.add(k);
-      const now = Date.now();
-      const data = list
-        .filter((x) => x.visibleAt <= now && x.row.run_id === runId)
-        .map((x) => Object.fromEntries([...cols].sort().map((c) => [c, x.row[c] ?? null])))
-        .sort((a, b) => Number(a.rev) - Number(b.rev) || String(a.ts).localeCompare(String(b.ts)))
-        .slice(Number(off ?? 0), Number(off ?? 0) + Number(lim));
-      return this.send(res, 200, { meta: [...cols].map((name) => ({ name, type: "Dynamic" })), data, rows: data.length });
+
+      // Legacy per-table row page: SELECT * FROM t WHERE run_id='x' ORDER BY rev, ts LIMIT n [OFFSET m]
+      let q = sql.match(/^SELECT \* FROM ([a-z_]+) WHERE run_id = '([a-z0-9-]+)' ORDER BY rev, ts LIMIT (\d+)(?: OFFSET (\d+))?$/);
+      if (q) {
+        return this.answerPage(res, q[1]!, q[2]!, () => true,
+          (a, b) => Number(a.rev) - Number(b.rev) || String(a.ts).localeCompare(String(b.ts)),
+          Number(q[3]), Number(q[4] ?? 0));
+      }
+
+      // mission_events page: WHERE run_id=x AND toInt64(revision) <= N ORDER BY toInt64(revision), event_id LIMIT n [OFFSET m]
+      q = sql.match(/^SELECT \* FROM (mission_events) WHERE run_id = '([a-z0-9-]+)' AND toInt64\(revision\) <= (\d+) ORDER BY toInt64\(revision\), event_id LIMIT (\d+)(?: OFFSET (\d+))?$/);
+      if (q) {
+        const maxRev = Number(q[3]);
+        return this.answerPage(res, q[1]!, q[2]!, (row) => Number(row.revision) <= maxRev,
+          (a, b) => Number(a.revision) - Number(b.revision) || String(a.event_id).localeCompare(String(b.event_id)),
+          Number(q[4]), Number(q[5] ?? 0));
+      }
+
+      // mission_events by id: WHERE run_id=x AND event_id='y' LIMIT n
+      q = sql.match(/^SELECT \* FROM (mission_events) WHERE run_id = '([a-z0-9-]+)' AND event_id = '([A-Za-z0-9_-]+)' LIMIT (\d+)$/);
+      if (q) {
+        const eid = q[3]!;
+        return this.answerPage(res, q[1]!, q[2]!, (row) => row.event_id === eid, () => 0, Number(q[4]), 0);
+      }
+
+      // mission_checkpoints page: WHERE run_id=x AND toInt64(revision) <= N ORDER BY toInt64(revision) DESC LIMIT n [OFFSET m]
+      q = sql.match(/^SELECT \* FROM (mission_checkpoints) WHERE run_id = '([a-z0-9-]+)' AND toInt64\(revision\) <= (\d+) ORDER BY toInt64\(revision\) DESC LIMIT (\d+)(?: OFFSET (\d+))?$/);
+      if (q) {
+        const maxRev = Number(q[3]);
+        return this.answerPage(res, q[1]!, q[2]!, (row) => Number(row.revision) <= maxRev,
+          (a, b) => Number(b.revision) - Number(a.revision),
+          Number(q[4]), Number(q[5] ?? 0));
+      }
+
+      return this.send(res, 400, { error: "fake: unsupported sql" });
     }
     this.send(res, 404, { error: "not found" });
+  }
+
+  private answerPage(
+    res: ServerResponse, table: string, runId: string,
+    filter: (row: Record<string, unknown>) => boolean,
+    sorter: (a: Record<string, unknown>, b: Record<string, unknown>) => number,
+    limit: number, offset: number,
+  ) {
+    const list = this.tables.get(table);
+    if (!list || list.length === 0) return this.send(res, 400, { error: "rawtree_error", message: "Code: 51. (EMPTY_LIST_OF_COLUMNS_QUERIED)" });
+    const cols = new Set<string>();
+    for (const x of list) for (const k of Object.keys(x.row)) cols.add(k);
+    const now = Date.now();
+    const data = list
+      .filter((x) => x.visibleAt <= now && x.row.run_id === runId && filter(x.row))
+      .map((x) => Object.fromEntries([...cols].sort().map((c) => [c, x.row[c] ?? null])))
+      .sort(sorter)
+      .slice(offset, offset + limit);
+    return this.send(res, 200, { meta: [...cols].map((name) => ({ name, type: "Dynamic" })), data, rows: data.length });
   }
 
   private seedAt(table: string, rows: Record<string, unknown>[]) {

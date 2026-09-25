@@ -10,6 +10,10 @@ export * from "./loader.ts";
 export * from "./projection.ts";
 export * from "./sql.ts";
 export * from "./visibility.ts";
+export * from "./event-sql.ts";
+export * from "./event-log.ts";
+export * from "./checkpoint.ts";
+export * from "./event-restore.ts";
 export { FakeRawTree, type AckMode } from "./fake-rawtree.ts";
 
 /** Build client/sink/loader from the validated storage config (reads root .env; never prints values). */
