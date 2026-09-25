@@ -301,3 +301,11 @@ Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real R
   - The only failure in both is the Nimble-retrieval check.
 - Checks: `check:types` ok, `test:unit` 177/177, `test:recovery` 17/17, `check:lint` 0 problems, console server/app typecheck ok, OpenBot DR route tests 17/17. `tenant-package.test.ts` needs `TEST_DATABASE_URL`, which isn't configured here.
 - Independent Opus 5.5 verification (dr-verifier) is running at the time of writing.
+- The independent Opus 5.5 verification (dr-verifier, read-only, at f06838c) ran all 10 commands with exit 0 and found no conflict markers or secrets. Dispositions:
+  - **D1 P1:** signed-run verification was never wired into production `/ag-ui`. Accepted and fixed in d6c7515, with a server-level test using a fake OpenBot. Live OpenBot verification is untested here (no database).
+  - **D2 P2:** U01/U02 have no tests. Accepted; assigned to dr-console. U07 is re-checked live on full-plan at 15:36: control, desk, feed and llama-server listen on 127.0.0.1 only, and LAN connections to 4400–4402 are refused.
+  - **D3 P2:** S11 and F02 have no deterministic tests. Accepted; assigned to dr-storage-events. F01 stays live-only.
+  - **D4 P2:** no independent review of 1abfb63 or the merge. Partly addressed: the verifier reviewed the merge and found it correct; the pending-append path is covered by its tests and live runs.
+  - **D5 P3:** fixed.
+  - **D6 P3:** the desk allows a lookup without a namespace. Deferred; defensive only, since every runner passes one.
+- dr-critic recheck at fe03812: F1–F8 closed, no new P0/P1.
