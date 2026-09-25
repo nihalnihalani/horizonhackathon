@@ -12,6 +12,8 @@ import { RawTreeClient, RawTreeEventLog } from "@dr/storage";
 import { MissionActor, MissionStopped, RowIdentityMismatch, type CommandResult } from "./actor.ts";
 import { timingSafeEqual } from "node:crypto";
 import { requireBearer } from "./ag-ui/auth";
+import type { AgUiHandlerOptions } from "./ag-ui/handler";
+import { verifyRunAssertion } from "./auth.ts";
 import { createMissionPort, statusMarkdown } from "./mission-port.ts";
 
 const HOST = "127.0.0.1";
@@ -111,7 +113,13 @@ export type ControlDeps = { actor: MissionActor; cfg: ConfigOf<"control">; ops: 
 export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
   // OpenBot authenticates with the shared DR_INTERNAL_TOKEN (apps/console/.env → agents.yaml auth.bearer); the signed
   // forwardedProps.openbotRun assertion is checked inside the handler when DR_REQUIRE_AGUI_ASSERTION=true.
-  const agUi = requireBearer(cfg.DR_INTERNAL_TOKEN, createAgUiHandler(createMissionPort(actor, ops)), (req) =>
+  // U05: verify the opaque signed assertion through OpenBot's service-token verify-run route (signing key stays in OpenBot).
+  const openbotUrl = process.env.DR_OPENBOT_URL ?? "http://127.0.0.1:3001";
+  const verify: AgUiHandlerOptions["verify"] = async ({ assertion, runId, threadId }) => {
+    const r = await verifyRunAssertion({ openbotUrl, internalToken: cfg.DR_INTERNAL_TOKEN, assertion, runId, threadId });
+    return r.ok ? { actorId: r.identity.actorId } : null;
+  };
+  const agUi = requireBearer(cfg.DR_INTERNAL_TOKEN, createAgUiHandler(createMissionPort(actor, ops), { verify }), (req) =>
     console.warn(`ag-ui: 401 ${req.method} from ${req.socket.remoteAddress} (${req.headers.authorization ? "bad" : "no"} bearer, ua=${req.headers["user-agent"] ?? "-"})`));
 
   /**

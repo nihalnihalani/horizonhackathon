@@ -5,8 +5,10 @@ import { noCandidateReason } from "./validator.ts";
 
 export const NO_ACCESSIBLE_SITE = "no_accessible_site_available";
 
-/** null when at least one candidate survives; otherwise the explicit blocked reason. */
-/** Same reason text as the post-planner F3b path (validator.noCandidateReason), so demo:f3b checks either path. */
+/**
+ * null when at least one candidate survives; otherwise the explicit blocked reason, with the same text as the
+ * post-planner F3b path (validator.noCandidateReason) so demo:f3b checks either path.
+ */
 export function preplannerBlock(cands: CandidateX[], ctx: PlannerContext, slot: string): string | null {
   const { valid, rejected } = filterCandidates(cands, ctx, slot);
   if (valid.length) return null;
