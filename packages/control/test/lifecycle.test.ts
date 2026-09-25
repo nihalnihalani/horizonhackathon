@@ -95,7 +95,7 @@ beforeAll(async () => {
   } as ConfigOf<"control">;
   events = new MemoryEventLog();
   actor = new MissionActor(cfg, "http://127.0.0.1:9", { events });
-  const ops: DemoOps = { enabled: true, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html" };
+  const ops: DemoOps = { enabled: true, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html", ledger: async () => [] };
   server = createServer(createControlHandler({ actor, cfg, ops }));
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

@@ -17,7 +17,7 @@ const CHILD = resolve(REPO_ROOT, "packages/control/test/fixtures/booking-child.t
 let fake: FakeRawTree; let desk: RunningDesk; let cfg: ConfigOf<"control">;
 const servers: Server[] = [];
 const actors: MissionActor[] = [];
-const ops: DemoOps = { enabled: true, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html" };
+const ops: DemoOps = { enabled: true, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html", ledger: async () => [] };
 
 async function control(events = new MemoryEventLog(), runnerMain = CHILD): Promise<{ actor: MissionActor; events: MemoryEventLog; url: string }> {
   let handler: (req: IncomingMessage, res: ServerResponse) => void = (_q, s) => { s.writeHead(503).end(); };

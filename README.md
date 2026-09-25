@@ -24,7 +24,7 @@ Surfaces:
 
 Real: the SIGKILL (the supervisor kills the held child; a new pid resumes), RawTree as the only durable state (runner writes go through control's acked single writer; the child never holds the RawTree key), the desk's idempotent booking and ledger, Nimble `/v2/extract` of the live status page through the ngrok tunnel, the Liquid LFM2.5-1.2B curator on llama-server, the OpenAI planner (`DR_PLANNER_MODEL`), token counts (o200k) and provider-reported input tokens.
 
-Simulated or labelled: the booking desk and the park status page are local simulations (127.0.0.1:4401/4402); the +48h clock jump is a `sim_clock` string (`SIMULATED`); Nimble parsing returns empty `data.parsing`, so the same CSS selectors are applied to the HTML Nimble fetched (`parse local-css`); Nimble domain-health returns 404 for this key and is shown as `unavailable`.
+Simulated or labelled: the booking desk and the park status page are local simulations (127.0.0.1:4401/4402); the +48h clock jump is a `sim_clock` string (`SIMULATED`); Nimble parses the 14 status fields server-side (`parse nimble`); if its parsing is ever incomplete, the same selectors run locally on the HTML Nimble fetched (`parse local-css`).
 
 The naive arm is a transcript-resume baseline, not the VALIDATION §6b competent comparator: it reloads a local transcript, does not reconcile or revalidate, derives action keys from the attempt number, and uses the same planner and the same desk. Its verdict comes from the same code validator: INVALID if any slot has two or more distinct committed desk receipts (invariant 4), if a committed campsite is not accessible, or if the total exceeds the budget; BLOCKED if a step is not done; otherwise VALID.
 

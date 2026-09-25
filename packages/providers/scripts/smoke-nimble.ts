@@ -1,9 +1,9 @@
-// Live smoke: Nimble domain health + extract. Prints ids, statuses, timings (and the public status fields) only.
-//   npm run smoke:nimble                                  → parks.ca.gov health + plain extract
-//   npm run smoke:nimble -- https://<host>/status.html    → health + status-page extract (14 fields)
+// Live smoke: Nimble extract. Prints ids, statuses, timings (and the public status fields) only.
+//   npm run smoke:nimble                                  → parks.ca.gov plain extract
+//   npm run smoke:nimble -- https://<host>/status.html    → status-page extract (14 fields)
 //   npm run smoke:nimble -- <url> --direct                → labelled direct fallback (not Nimble)
 import { loadConfig } from "@dr/shared";
-import { NimbleSensor, hostOf, siteMap } from "../src/index.ts";
+import { NimbleSensor, siteMap } from "../src/index.ts";
 
 const args = process.argv.slice(2).filter((a) => a !== "--");
 const direct = args.includes("--direct");
@@ -11,8 +11,6 @@ const url = args.find((a) => /^https?:/.test(a));
 const cfg = loadConfig("providers");
 const s = new NimbleSensor({ apiKey: cfg.NIMBLE_API_KEY });
 const target = url ?? "https://www.parks.ca.gov/?page_id=468";
-const health = await s.health(hostOf(target));
-console.log(JSON.stringify({ health: { host: health.host, status: health.status, success_rate: health.success_rate ?? null, http_status: health.http_status ?? null, health_ms: health.health_ms } }));
 try {
   if (!url) {
     const r = await s.extractPage(target);

@@ -238,6 +238,16 @@ Status: **live-verified in the OpenBot browser** (Chrome, http://127.0.0.1:3010,
 - Verdicts (control `/missions`): dr **VALID** (all 4 steps, $280, duplicate_effects 0); naive **INVALID** (2 ferry receipts, Site A rejected closed, duplicate_effects 1, stale_actions 1). Context tokens dr 526/612/438/454; naive 481→550→682→738→830.
 - control.log shows no `ag-ui: 401` from OpenBot during the run; the only 401 is an earlier unauthenticated curl.
 - Screen recording exported by the browser as `openbot_dead_reckoning_plan_kill_close_resume.gif` (Downloads).
+
+## 2026-09-25 15:20–15:50 PT — Plain-language narration, scorecard, board redesign, dev script (Opus 5.5, `claude-opus-5-5`)
+
+Status: **implemented + unit-tested + live-verified** (chat via /ag-ui and in the OpenBot browser; board in Chrome).
+
+- `packages/control/src/narrator.ts` (new): turns the runners' typed events (recovered, observation, curator, context_ops, step, planner, booking, verdict, holding) into readable lines. 🔵 Dead Reckoning / 🟠 Ordinary agent (the transcript-resume baseline, renamed from "naive" in user-facing text). Planner context size is folded into the booking line. `scorecard()` builds a side-by-side table whose effect counts come from the desk's own ledger (`GET /admin/ledger`), not from the agents; unknown ledger shows `?`.
+- `mission-port.ts`: chat verbs now narrate instead of relaying raw log lines; `resume` ends with the scorecard; new verbs `details` (the old technical log) and `scorecard`; `crash` is an alias of `kill`. `server.ts`: `DemoOps.ledger`, `GET /scorecard` ({results, markdown}), and a server-side narrator that publishes the same lines as SSE `story` events (new `SseEventType`).
+- `public/board.html`: headline question, numbered buttons (Start both / Crash / Close Site A / Bring back), orange for the ordinary agent, narrated story per agent, technical log collapsed, scorecard across the bottom, inline error instead of `alert()`.
+- `scripts/dev.sh` (new): `status | up [public] | down | restart <service>`; skips services already listening (the "address already in use" errors from `npm run dev:desk` / `dev:control` meant they were already up); stops only the process listening on each service's own port plus its npm/bun parent.
+- Checks: `npx vitest run --exclude '**/*.recovery.test.ts'` 97/97 (8 new narrator/scorecard tests); `npm run check:types` clean. Live: two full plan → kill → close site A → resume runs through /ag-ui (latest DR VALID $280, 1 ferry; ordinary INVALID $310, 2 ferries, Site A rejected closed; tokens 528→621→444→460 vs 485→555→684→740→835), one run typed in the OpenBot browser (scorecard table renders), board screenshot checked. `scripts/dev.sh restart control` and `up` (all skipped) verified.
 ## Connectivity check — 2026-09-25T20:38:43Z (26 September 2026 IST)
 
 User-requested checks used the private root .env; no credential values were printed or copied into this log. Read the RawTree HTTP/query skill references, fetched its live OpenAPI, and inspected the pinned CopilotKit runtime 1.70.1 client source for authenticated read routes. Ran python3 /private/tmp/dr-connectivity-check.py (exit 0; individual outcomes below). The probe script reports failures as data, so exit 0 alone is not a provider success claim.

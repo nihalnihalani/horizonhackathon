@@ -110,10 +110,7 @@ export type Observation = {
   raw_hash: string;
   nimble_ms: number;
 };
-export type DomainHealth = { host: string; status: string; raw: unknown };
-
 export interface Sensor {
-  health(host: string): Promise<DomainHealth>;
   extractStatusPage(url: string, opts?: { expectedWorldVersion?: number }): Promise<Observation>;
 }
 

@@ -2,6 +2,7 @@
 // runner-facing internal routes, SSE feed, operator demo controls, and the AG-UI endpoint OpenBot calls.
 // createControlHandler() is importable by tests; the listener only starts when this file is the entrypoint.
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { Narrator, scorecard, type LedgerOutcome } from "./narrator.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,7 +15,7 @@ import { timingSafeEqual } from "node:crypto";
 import { requireBearer } from "./ag-ui/auth";
 import type { AgUiHandlerOptions } from "./ag-ui/handler";
 import { verifyRunAssertion } from "./auth.ts";
-import { createMissionPort, statusMarkdown } from "./mission-port.ts";
+import { collectResults, createMissionPort, statusMarkdown } from "./mission-port.ts";
 
 const HOST = "127.0.0.1";
 const BOARD = resolve(dirname(fileURLToPath(import.meta.url)), "../public/board.html");
@@ -24,6 +25,8 @@ export type DemoOps = {
   world(b: { site: string; status: string; notice?: string }): Promise<{ world_version?: number }>;
   reset(): Promise<unknown>;
   statusUrl(): Promise<string>;
+  /** The desk's own ledger for one run (authoritative count of effects). Null if the desk is unreachable. */
+  ledger(run_id: string, arm: string): Promise<LedgerOutcome[] | null>;
 };
 
 /** Status page URL the runners observe: explicit env, else the local ngrok tunnel (Nimble needs a public URL), else loopback (direct fallback). */
@@ -56,6 +59,14 @@ export function createDemoOps(cfg: ConfigOf<"control">, actor: MissionActor): De
     },
     reset: async () => { const r = await deskAdmin("/admin/reset", {}); actor.log("operator: desk world reset to v1"); return r; },
     statusUrl: resolveStatusUrl,
+    ledger: async (run_id, arm) => {
+      try {
+        const u = `${cfg.DR_WORLD_BASE_URL.replace(/\/$/, "")}/admin/ledger?run_id=${encodeURIComponent(run_id)}&arm=${encodeURIComponent(arm)}`;
+        const r = await fetch(u, { headers: { authorization: `Bearer ${cfg.DR_OPERATOR_TOKEN}` }, signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return null;
+        return ((await r.json()) as { outcomes?: LedgerOutcome[] }).outcomes ?? [];
+      } catch { return null; }
+    },
   };
 }
 
@@ -111,6 +122,13 @@ const send = (res: ServerResponse, r: CommandResult) => json(res, r.http, r.body
 export type ControlDeps = { actor: MissionActor; cfg: ConfigOf<"control">; ops: DemoOps };
 
 export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
+  // Narrated story lines for the board: the same wording the chat uses, published live as SSE "story" events.
+  const storyNarrator = new Narrator();
+  actor.subscribe((e) => {
+    if (e.type === "story") return;
+    const text = storyNarrator.line(e);
+    if (text) actor.publish("story", { text }, { arm: e.arm, run_id: e.run_id });
+  });
   // OpenBot authenticates with the shared DR_INTERNAL_TOKEN (apps/console/.env → agents.yaml auth.bearer); the signed
   // forwardedProps.openbotRun assertion is checked inside the handler when DR_REQUIRE_AGUI_ASSERTION=true.
   // U05: verify the opaque signed assertion through OpenBot's service-token verify-run route (signing key stays in OpenBot).
@@ -256,6 +274,8 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
       if (!who) return apiError(res, 401, { code: "UNAUTHORIZED", message: "internal token with x-dr-actor-id, or operator token, required", retryable: false });
       return json(res, 200, { missions: actor.snapshot().filter((x) => who.admin || actor.byId.get(x.run_id)?.meta.ownerId === who.ownerId) });
     }
+    // Read-only, loopback-only view like /status.md; counts come from the desk's own ledger.
+    if (m === "GET" && p === "/scorecard") { const results = await collectResults(actor, ops); return json(res, 200, { results, markdown: scorecard(results) }); }
     if (m === "GET" && p === "/status.md") { res.writeHead(200, { "content-type": "text/markdown" }); return res.end(statusMarkdown(actor)); }
     if (m === "GET" && p === "/board") {
       if (!existsSync(BOARD)) return json(res, 404, { error: "board.html not present" });

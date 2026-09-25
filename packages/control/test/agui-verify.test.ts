@@ -33,7 +33,7 @@ beforeAll(async () => {
     DR_WORLD_BASE_URL: "http://127.0.0.1:9", DR_WORLD_TOKEN: "w", DR_OPERATOR_TOKEN: "o", DR_INTERNAL_TOKEN: I, DR_ENABLE_DEMO_CONTROLS: false,
   } as ConfigOf<"control">;
   const actor = new MissionActor(cfg, "http://127.0.0.1:9", { events: new MemoryEventLog() });
-  const ops: DemoOps = { enabled: false, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html" };
+  const ops: DemoOps = { enabled: false, world: async () => ({}), reset: async () => ({}), statusUrl: async () => "http://127.0.0.1:9/status.html", ledger: async () => [] };
   const h = createControlHandler({ actor, cfg, ops });
   control = createServer((q, s) => h(q, s));
   url = await listen(control);
