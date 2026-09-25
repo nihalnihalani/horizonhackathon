@@ -110,6 +110,7 @@ import {
   createPackageStatusReader,
   loadTenantPackage,
   synchronizeTenantPackage,
+  packageAgentHeaders,
 } from "./tenant-package";
 import { createUserInstructionsStore } from "./user-instructions";
 import { createUserPreferencesStore } from "./user-preferences";
@@ -231,6 +232,7 @@ const loadAgentsForActor = createRuntimeAgentLoader(
   database,
   agentVault,
   config.managedAgent,
+  packageAgentHeaders(tenantPackage),
 );
 await synchronizeTenantPackage(database, tenantPackage);
 /*

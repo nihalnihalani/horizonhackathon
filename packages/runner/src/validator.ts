@@ -21,6 +21,16 @@ export const VALIDATOR_RULES = [
   "VALID otherwise",
 ];
 
+/**
+ * Deterministic block reason when the code filter leaves no candidate for a step (e.g. F3b: Sites A and C closed,
+ * Site B open but inaccessible). Written by the runner into plan_steps, so the terminal verdict quotes code, not model prose.
+ */
+export function noCandidateReason(slot: string, accessibleRequired: boolean, rejected: { resource: string; reason: string }[]): string {
+  const code = slot === "campsite" && accessibleRequired ? "no_accessible_site_available" : `no_valid_${slot}_candidate`;
+  const why = rejected.map((r) => `${r.resource}: ${r.reason}`).join(", ") || "no candidates";
+  return `${code}: no ${slot} candidate satisfies accessible=${accessibleRequired} and status=open (${why})`;
+}
+
 export async function validateRun(p: Projection, desk: DeskClient): Promise<Verdict> {
   const committed: Verdict["committed"] = {};
   const seen = new Set<string>();

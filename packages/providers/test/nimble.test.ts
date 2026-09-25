@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { NIMBLE_STATUS_FIELD_NAMES, NIMBLE_STATUS_PARSER, SourceUnverified } from "@dr/shared";
-import { NimbleSensor, applyParserLocally, classifySource, factsFromObservation, hostOf, siteMap } from "../src/index.ts";
+import { NIMBLE_STATUS_PARSER_REQUEST, NimbleSensor, applyParserLocally, classifySource, factsFromObservation, hostOf, siteMap } from "../src/index.ts";
 import { fakeFetch, statusHtml } from "./helpers.ts";
 
 const fx = (n: string) => JSON.parse(readFileSync(resolve(__dirname, "fixtures", n), "utf8"));
@@ -43,7 +43,22 @@ describe("NimbleSensor.extractStatusPage", () => {
     expect(o.raw_hash).toMatch(/^[0-9a-f]{64}$/);
     expect(calls[0]!.url).toBe("https://sdk.nimbleway.com/v2/extract");
     expect(calls[0]!.body).toMatchObject({ render: false, parse: true, headers: { "ngrok-skip-browser-warning": "1" } });
-    expect(Object.keys(calls[0]!.body.parser)).toHaveLength(14);
+    // One schema node whose selector unwraps `html` from Nimble's {url, html} parse root.
+    expect(calls[0]!.body.parser).toEqual({ type: "schema", selector: { type: "json", path: "html" }, fields: NIMBLE_STATUS_PARSER });
+    expect(Object.keys(calls[0]!.body.parser.fields)).toHaveLength(14);
+    expect(calls).toHaveLength(1);
+  });
+  it("request parser wraps the frozen 14 terminals without changing them", () => {
+    expect(NIMBLE_STATUS_PARSER_REQUEST.fields).toBe(NIMBLE_STATUS_PARSER);
+    expect(applyParserLocally(html, NIMBLE_STATUS_PARSER_REQUEST.fields)).toEqual(applyParserLocally(html, NIMBLE_STATUS_PARSER));
+  });
+  it("prefers Nimble parsing over the local selectors when both are available", async () => {
+    const saved = fx("nimble-status-parsed.json");
+    const both = { ...saved, data: { ...saved.data, html: html.replace(">closed<", ">open<") } };
+    const { f } = fakeFetch([() => ({ json: both })]);
+    const o = await new NimbleSensor({ apiKey: "k", fetchImpl: f }).extractStatusPage("https://t.example/status.html");
+    expect(o.parse_mode).toBe("nimble");
+    expect(o.fields.siteA_status).toBe("closed");
   });
   it("falls back to local CSS over Nimble-retrieved HTML when data.parsing is {}", async () => {
     const { f, calls } = fakeFetch([() => ({ json: fx("nimble-status-empty-parsing.json") })]);
@@ -82,7 +97,8 @@ describe("health + classification", () => {
     expect(h).toMatchObject({ host: "parks.ca.gov", status: "up" });
     expect(ok.calls[0]!.body).toEqual({ domains: ["parks.ca.gov"] });
     const nf = fakeFetch([() => ({ status: 404, text: "" })]);
-    expect((await new NimbleSensor({ apiKey: "k", fetchImpl: nf.f }).health("x.com")).status).toBe("unavailable");
+    const u = await new NimbleSensor({ apiKey: "k", fetchImpl: nf.f }).health("x.com");
+    expect(u).toMatchObject({ status: "unavailable", http_status: 404, raw: { reason: "domain-health route not available (404)" } });
   });
   it("classifies unreachable vs changed vs unchanged", () => {
     const v2 = fx("nimble-status-parsed.json").data.parsing;

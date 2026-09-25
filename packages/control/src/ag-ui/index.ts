@@ -6,3 +6,4 @@ export {
   type AgUiHandlerCtx,
   type AgUiHandlerOptions,
 } from "./handler";
+export { requireBearer, bearerMatches } from "./auth";

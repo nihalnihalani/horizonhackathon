@@ -22,6 +22,7 @@ import {
   expandEnvironment,
   type LoadedTenantPackage,
   loadTenantPackage,
+  packageAgentHeaders,
   synchronizeTenantPackage,
   validateTenantPackage,
   validateThemeCss,
@@ -241,6 +242,25 @@ describe("a seeded Mastra Bot", () => {
       "{ id: risk, name: Risk, title: Risk, role_description: Check things., type: remote-ag-ui, endpoint: http://risk.internal, remote_agent_id: ignored }",
     ).agents;
     expect(agent?.configuration).toEqual({ endpoint: "http://risk.internal" });
+  });
+
+  test("a declared auth header is carried beside, never inside, the stored configuration", () => {
+    const loaded = withAgent(
+      "{ id: dr, name: DR, title: DR, role_description: Plan., type: remote-ag-ui, endpoint: http://dr.internal/ag-ui, auth: { header: Authorization, bearer: s3cret } }",
+    );
+    const [agent] = loaded.agents;
+    expect(agent?.configuration).toEqual({ endpoint: "http://dr.internal/ag-ui" });
+    expect(JSON.stringify(agent?.configuration)).not.toContain("s3cret");
+    expect(packageAgentHeaders(loaded).get("dr")).toEqual({
+      Authorization: "Bearer s3cret",
+    });
+  });
+
+  test("an auth block that interpolates to nothing sends no header", () => {
+    const loaded = withAgent(
+      "{ id: dr, name: DR, title: DR, role_description: Plan., type: remote-ag-ui, endpoint: http://dr.internal/ag-ui, auth: { bearer: '' } }",
+    );
+    expect(packageAgentHeaders(loaded).size).toBe(0);
   });
 
   test("a kind nobody serves is refused by name", () => {

@@ -18,8 +18,8 @@ import {
 } from "@dr/providers";
 import { emptyProjection } from "@dr/storage";
 import { HttpProjectionLoader, HttpRowSink, emit, exitAfterFlush, httpClaimDispatch, httpIntentGate } from "./io.ts";
-import { validateRun } from "./validator.ts";
-import { noCandidateReason } from "./candidates.ts";
+import { noCandidateReason, validateRun } from "./validator.ts";
+import { preplannerBlock } from "./candidates.ts";
 import { ensureInitialization, seedRun } from "./initialization.ts";
 
 const { values: argv } = parseArgs({
@@ -219,14 +219,20 @@ async function runDr(): Promise<"done" | "stopped"> {
     }
     const rendered = renderWorkingContext({ projection: j.state, step: id, evicted, evidence });
     const ctx: PlannerContext = { constraints: constraintsFromProjection(j.state), spent_cents: spentCents(j.state, ps.slot) };
-    const none = noCandidateReason(cands, ctx, ps.slot);
+    const none = preplannerBlock(cands, ctx, ps.slot);
     if (none) { await blockStep(j, id, none); continue; }
     const d = await prov.planner.decide(rendered, id, cands, ctx);
     const rej = d.rejected_candidates.map((r) => `${r.resource}:${r.reason}`).join(", ");
     log(`PLANNER ${id}: ${d.action}${d.resource ? ` ${d.resource}` : ""} — ${d.reason} · context_tokens ${d.context_tokens.count} · planner_tokens_in ${d.planner_tokens_in}${rej ? ` · code-rejected ${rej}` : ""}`);
     emit("planner", { step: id, action: d.action, resource: d.resource ?? null, reason: d.reason, context_tokens: d.context_tokens.count, planner_tokens_in: d.planner_tokens_in, rejected: d.rejected_candidates, valid: d.valid_candidates });
     await j.append("metrics", { step: id, phase: "planner", context_tokens: d.context_tokens.count, planner_tokens_in: d.planner_tokens_in, curator_ms: m.curator_ms, nimble_ms: m.nimble_ms, duplicate_effects: 0, stale_actions: 0 });
-    if (d.action !== "book" || !d.resource) { await blockStep(j, id, `planner ${d.action}: ${d.reason}`); continue; }
+    if (d.action !== "book" || !d.resource) {
+      // No code-valid candidate: the block reason is the code filter's, not the model's prose (F3b).
+      const reason = d.valid_candidates.length === 0
+        ? `${noCandidateReason(ps.slot, ctx.constraints.accessible_required, d.rejected_candidates)}; planner ${d.action}`
+        : `planner ${d.action}: ${d.reason}`;
+      await blockStep(j, id, reason); continue;
+    }
     const wv = await desk.worldVersion();
     let out;
     try {

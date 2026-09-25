@@ -193,6 +193,16 @@ type TenantAgent = {
    * pairs them by hand. The pairing is the package's to state: it wrote both files.
    */
   skills: string[];
+  /**
+   * The header a remote coworker sits behind, declared in the package as
+   * `auth: { header?, value? | bearer? }` and interpolated from the environment like the endpoint.
+   *
+   * NEVER PERSISTED. It is deliberately not part of `configuration`, which is written to the agent
+   * row and readable by anything that can read an agent; it lives only in this process and is
+   * attached at run time by `createRuntimeAgentLoader`. A value that interpolates to nothing means
+   * no header, so a package can name a secret its deployment has not been given.
+   */
+  auth?: { header: string; value: string };
 };
 
 type TenantChannel = {
@@ -443,9 +453,48 @@ function parseAgents(
           agent.skills === undefined || agent.skills === null
             ? []
             : stringArray(agent.skills, "agent.skills"),
+        ...(type !== "built_in" ? packageAgentAuth(agent.auth, source) : {}),
       },
     ];
   });
+}
+
+/**
+ * A remote coworker's package-declared header: `value` is sent as is, `bearer` as `Bearer <bearer>`.
+ * Blank after interpolation means no header. The value never appears in an error.
+ */
+function packageAgentAuth(
+  input: unknown,
+  source: string,
+): { auth?: { header: string; value: string } } {
+  if (input === undefined || input === null) return {};
+  const auth = asRecord(input, "agent.auth");
+  const header =
+    typeof auth.header === "string" && auth.header.trim()
+      ? auth.header.trim()
+      : "Authorization";
+  if (!/^[A-Za-z0-9-]+$/.test(header)) {
+    throw new Error(`${source}: agent.auth.header is not a valid header name`);
+  }
+  const bearer = typeof auth.bearer === "string" ? auth.bearer.trim() : "";
+  const raw = typeof auth.value === "string" ? auth.value.trim() : "";
+  const value = raw || (bearer ? `Bearer ${bearer}` : "");
+  if (!value) return {};
+  if (/[\r\n\0]/.test(value) || [...value].some((c) => (c.codePointAt(0) ?? 0) > 0xff)) {
+    throw new Error(`${source}: agent.auth value cannot be sent as a header`);
+  }
+  return { auth: { header, value } };
+}
+
+/** Package-declared headers by agent id, for `createRuntimeAgentLoader`. Held in memory only. */
+export function packageAgentHeaders(
+  tenantPackage: Pick<LoadedTenantPackage, "agents">,
+): Map<string, Record<string, string>> {
+  const headers = new Map<string, Record<string, string>>();
+  for (const agent of tenantPackage.agents) {
+    if (agent.auth) headers.set(agent.id, { [agent.auth.header]: agent.auth.value });
+  }
+  return headers;
 }
 
 /**

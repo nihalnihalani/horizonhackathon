@@ -11,6 +11,7 @@ import { createAgUiHandler } from "./ag-ui/handler";
 import { RawTreeClient, RawTreeEventLog } from "@dr/storage";
 import { MissionActor, MissionStopped, RowIdentityMismatch, type CommandResult } from "./actor.ts";
 import { timingSafeEqual } from "node:crypto";
+import { requireBearer } from "./ag-ui/auth";
 import { createMissionPort, statusMarkdown } from "./mission-port.ts";
 
 const HOST = "127.0.0.1";
@@ -108,7 +109,10 @@ const send = (res: ServerResponse, r: CommandResult) => json(res, r.http, r.body
 export type ControlDeps = { actor: MissionActor; cfg: ConfigOf<"control">; ops: DemoOps };
 
 export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
-  const agUi = createAgUiHandler(createMissionPort(actor, ops));
+  // OpenBot authenticates with the shared DR_INTERNAL_TOKEN (apps/console/.env → agents.yaml auth.bearer); the signed
+  // forwardedProps.openbotRun assertion is checked inside the handler when DR_REQUIRE_AGUI_ASSERTION=true.
+  const agUi = requireBearer(cfg.DR_INTERNAL_TOKEN, createAgUiHandler(createMissionPort(actor, ops)), (req) =>
+    console.warn(`ag-ui: 401 ${req.method} from ${req.socket.remoteAddress} (${req.headers.authorization ? "bad" : "no"} bearer, ua=${req.headers["user-agent"] ?? "-"})`));
 
   /**
    * Mission REST caller: OpenBot (internal token + trusted x-dr-actor-id) or the local operator (admin).

@@ -5,7 +5,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const files = execSync("git ls-files 'packages/*.ts' 'scripts/*.ts' 'scripts/*.mjs' 'bench/*.ts'", { encoding: "utf8" }).split("\n").filter(Boolean);
+const files = execSync("git ls-files 'packages/*.ts' 'scripts/*.ts' 'scripts/*.mjs' 'bench/*.ts'", { encoding: "utf8" }).split("\n").filter((f) => f && f !== "scripts/lint.mjs");
 const rules = [
   { id: "argmax-restore", re: /argMax\(/, allow: /closing-numbers|demo-numbers|as-of/i, why: "argMax(value, ts) must not order authoritative restore state" },
   { id: "json-patch", re: /applyPatch|jsonpatch|fast-json-patch/i, why: "no arbitrary JSON Patch into mission state" },

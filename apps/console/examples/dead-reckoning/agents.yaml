@@ -68,6 +68,12 @@ agents:
     avatar_seed: dead-reckoning
     type: remote-ag-ui
     endpoint: ${DEAD_RECKONING_AG_UI_URL:-}
+    # DR control refuses /ag-ui without `Authorization: Bearer <DR_INTERNAL_TOKEN>`. The token is read
+    # from this deployment's environment (apps/console/.env) at load time, held in memory only, and
+    # never written to the agent row. Blank means no header, and DR answers 401.
+    auth:
+      header: Authorization
+      bearer: ${DR_INTERNAL_TOKEN:-}
 
   # The Bot somebody picked in setup.
   #

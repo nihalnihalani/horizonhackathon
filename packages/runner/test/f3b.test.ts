@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { F3, type CommitmentRow, type DeskClient, type DeskReceipt, type LookupResult, type PlanStepRow } from "@dr/shared";
 import { emptyProjection } from "@dr/storage";
 import type { CandidateX, PlannerContext } from "@dr/providers";
-import { NO_ACCESSIBLE_SITE, noCandidateReason } from "../src/candidates.ts";
+import { NO_ACCESSIBLE_SITE, preplannerBlock as noCandidateReason } from "../src/candidates.ts";
 import { validateRun } from "../src/validator.ts";
 
 const f3b = F3.companion_f3b as { extra_world_edit: { site: string; status: "closed" }; verdict: string; reason: string };
@@ -27,11 +27,11 @@ describe("F3b: no accessible available replacement (V01)", () => {
 
   it("pre-planner check blocks with no_accessible_site_available (and passes when C is open, i.e. plain F3)", () => {
     const reason = noCandidateReason(campsites(), ctx, "campsite");
-    expect(reason).toBe(`${NO_ACCESSIBLE_SITE} (site-A:closed, site-B:not_accessible, site-C:closed)`);
+    expect(reason).toBe(`${NO_ACCESSIBLE_SITE}: no campsite candidate satisfies accessible=true and status=open (site-A: closed, site-B: not_accessible, site-C: closed)`);
     const f3 = campsites().map((c) => (c.resource === "site-C" ? { ...c, status: "open" as const } : c));
     expect(noCandidateReason(f3, ctx, "campsite")).toBeNull();
     // over budget is not mislabelled as an accessibility block
-    expect(noCandidateReason(f3, { ...ctx, spent_cents: F3.trip.budget_cents }, "campsite")).toMatch(/^no_valid_candidate/);
+    expect(noCandidateReason(f3, { ...ctx, spent_cents: F3.trip.budget_cents }, "campsite")).toMatch(/^no_valid_campsite_candidate/);
   });
 
   it("terminal validator: BLOCKED with the explicit reason; never VALID", async () => {
