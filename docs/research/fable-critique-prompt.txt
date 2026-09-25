@@ -1,0 +1,79 @@
+You are Fable; this is a critical second round of your own hackathon ideation, reproduced below. No tools or external calls; at most 1300 words.
+
+Your first round does NOT satisfy the request well enough. The user rejected ASOF as boring; they want a winning, vivid, useful 5-hour project using exactly Tinybird/RawTree + Nimble + Liquid AI. An API-version coding demo is narrow and not emotionally vivid. The prescribed 1/5 versus 5/5 in your output is invented, not evidence. Choosing breaking changes until the baseline fails is a biased evaluation. Never require a naive agent to fail for the demonstration to succeed. Use fixed task fixtures and report real outcomes including ties.
+
+Fresh primary research from parent agent: Letta already has MemFS git memory, /doctor, edit, dreaming; Mem0 Dream merges/supersedes; Zep has temporal facts. Hackathon gallery already contains ReMem intelligent forgetting, contextScope eval, WebBrain memory, and memory games. arXiv 2608.10502 has dependency-guided rollback memory repair (assumes diagnosed faults, instrumented provenance, resettable/idempotent/compensating effects); 2608.01619 studies memory-update behavioral staleness; 2608.29381 covers safe resume. These are already prior art; no unsupported first-ever claims. Strong possible residual product angle: external-world revalidation plus action receipts AFTER a crash/compaction. You cannot safely restart from a saved plan when the world changed and some previous actions already happened. Irreversible action duplication is different from merely having stale prose.
+
+Capabilities: RawTree only append/ingest and read-only SQL; persist typed state patches + action receipts + epochs, reconstruct with argMax. Local mutable JSON current projection okay. Nimble live search/extract + structured claims with trust report/citations, asynchronous low-effort searches or cached real results for demo. Liquid compact local constrained-JSON curator proposing same-key updates; deterministic validators/invariants gate patches and execution. No invented automated ground truth, no SQL triggers dependency, no invented external action exactly-once guarantees. Three integrations load-bearing for the chosen workflow, but do not pretend a replaceable vendor is scientifically essential. Other ordinary model infrastructure okay, not a fourth sponsor. Clear retention: raw artifacts can be offloaded; superseded records may be archived with lineage; actual discarded noise has expiry and no recall promise. No training or complex orchestration.
+
+TASK: First critique your two winners in 150 words. Then propose exactly THREE sharper product concepts (a user can immediately want them) with strong theatrical 90-second demo. Include at least one NON-coding real-world task, e.g. a constrained trip/event/expedition/launch disrupted while the agent was asleep. Choose sensible low-stakes domain where a deterministic simulator/local sandbox verifies outcomes, grounded in real sourced web data; all disturbances openly labeled and external actions dry-run. No city-scale simulation, medical emergency, metaphor-only UI, or six-agent swarm. The story must show a specific end outcome completed or safely blocked, not just a repaired graph. For each state what demo observation proves and does not prove; distinguish stale memories vs stale commitments.
+
+Select one recommendation. Supply: single-sentence pitch, 90s beat schedule, precise durable/evict/recall policy, minimal typed state sketch, one sponsor job each, deterministically checked invariants, 5h cut line, why it could win / lose against existing memory products. A vivid object or intervention (pull plug, swap brain, identity card, active map, action receipts) is good only if it reveals real causal behavior. If you still prefer Unlearn, justify why it beats this new product direction. Do not reflexively flatter the critique.
+
+ORIGINAL FABLE OUTPUT:
+Here are six ideas, then the top two. All sponsor claims below are proposals against the stated capabilities, not verified results.
+
+**1. Pull the Plug** (continuity under catastrophe)
+- Pitch: a codebase-migration agent that survives being killed mid-run and resumes at the exact file, without re-reading its own transcript or re-fetching the web.
+- Who needs it: anyone running multi-hour agent jobs that die on rate limits, deploys, or laptop lids. Failure prevented: restarting from zero and redoing paid work.
+- Demo beat: objective is migrating a real 40-file repo from pydantic v1 to v2. At file 23 a big red button labeled TEST EVENT kills the process. Screen goes dark. Restart. Agent reads a 2 KB projection, says "resuming at file 24, symbol map has 11 entries," finishes, tests go green. Counter shows files reprocessed: 0.
+- State: durable is a typed ledger of per-file status plus a per-symbol API map with source citation ids. Discarded is every raw diff, every fetched doc page, and all chain-of-thought. Intelligent forgetting: once a file's tests pass, its diff and reasoning are evicted and only a hash plus status remain. Selective recall pulls one file's history only if its tests later fail.
+- Sponsors: RawTree stores ledger patches, argMax projection gives current state, resume is a query. Remove it and restart must replay a transcript. Nimble fetches the migration guide and changelog once, cached for replay. Remove it and the symbol map is hand-written, which judges will notice. Liquid curates each observed symbol into keep, supersede, or discard as constrained JSON. Remove it and the ledger bloats with every doc excerpt and resume cost climbs.
+- MVP cuts: one repo, one kill point, planner is an ordinary local model. Test: kill at file N, assert reprocessed files equals zero and suite passes. Fair baseline is restart by replaying the full transcript log. It proves resume tokens and correctness on this repo only.
+- Hardest assumption: the migration itself works reliably in five hours. Reduce by pre-running the migration and choosing files the planner already handles.
+
+**2. Unlearn** (contrarian deletion)
+- Pitch: an agent that writes correct code against a library only because it deliberately deletes superseded API facts it found on the web.
+- Who needs it: developers whose agents hallucinate old signatures because the web is full of stale docs. Failure prevented: code that compiles against 2022 and breaks against today.
+- Demo beat: objective is five coding tasks against pydantic v2. Nimble returns mixed v1 and v2 excerpts, which is the real state of the web. Split screen. Left agent keeps everything and writes a v1 validator that fails. Right agent's curator marks the v1 claim superseded, evicts it, and writes v2 that passes. Scoreboard shows 1 of 5 versus 5 of 5. Then the user asks "why not the old way?" and the agent recalls the evicted claim with its citation.
+- State: durable is a symbol map keyed by function name with version and trust. Discarded is every superseded entry, moved out of the working set entirely, not summarized. Recall is by key on demand only.
+- Sponsors: Nimble provides real conflicting excerpts and trust reports used as a tie-breaker input, never as truth. Remove it and the conflict is fabricated. Liquid classifies same-key claims into supersede or keep. Remove it and the planner must read all excerpts, which is the failing baseline. RawTree holds evicted claims so recall works after pages leave the prompt. Remove it and "why not the old way" gets "I don't remember."
+- MVP cuts: five tasks, cached search results, one library. Test: pass rate of generated snippets against installed library tests, both arms same planner and prompt. Proves curation helps on this library set, nothing broader.
+- Hardest assumption: the full-context baseline actually fails. Reduce by picking known breaking changes such as validator versus field_validator and dict versus model_dump.
+
+**3. Shift Change**
+- Pitch: a long support-ticket agent replaced by a fresh instance every ten minutes, with only a typed handover packet crossing the boundary.
+- Who needs it: teams whose agents degrade over hours. Failure prevented: the dead-eyed agent that has forgotten the customer's constraint from hour one.
+- Demo beat: countdown hits zero, old agent leaves, new one reads a handover packet under 1 KB and immediately honors a constraint stated 40 minutes earlier. Accelerated replay is labeled.
+- State: durable is constraints, decisions, open questions. Discarded is all dialogue. Forgetting: resolved questions are removed rather than marked done.
+- Sponsors: Nimble researches vendor answers, Liquid writes the handover as constrained JSON, RawTree reconstructs the packet across shifts. Remove RawTree and the packet is a file, which is fatal to differentiation.
+- Test: constraint-honoring rate across shifts versus one long-context agent. Weak because a single long-context agent may do fine within demo length.
+- Hardest assumption: showing degradation without an intentionally broken baseline. Eliminated for that reason.
+
+**4. Deposition**
+- Pitch: hours after a decision, cross-examine the agent and it reconstructs exactly what it knew, from what source, at that moment, though the source text is long gone.
+- Who needs it: regulated teams. Failure prevented: "the agent did it and nobody can say why."
+- Demo beat: prosecutor-style questions, agent answers with citation ids and excerpts, then a follow-up reveals the evidence changed later and the agent says so.
+- State: durable is decision records with evidence ids. Discarded is page text. Recall by decision id.
+- Sponsors: Nimble trust reports supply the excerpts, RawTree stores them, Liquid tags which evidence was decision-bearing.
+- Test: answer accuracy against a ground-truth event log.
+- Hardest assumption: it stays distinct from ASOF. It does not. Bitemporal belief lookup is the same category. Eliminated.
+
+**5. Quarantine**
+- Pitch: new web claims enter a probation tier and only reach the working set after corroboration, so one bad forum post cannot poison a day-long plan.
+- Who needs it: agents that act on research. Failure prevented: a confidently wrong action from a single source.
+- Demo beat: a labeled test-event claim arrives, the agent visibly refuses to promote it, a second search contradicts it, it is evicted with a reason.
+- State: durable is promoted facts with corroboration count. Probation is a bounded ring that drops the oldest uncorroborated claims. That drop is the intelligent forgetting.
+- Sponsors: Nimble runs the corroborating search and supplies trust as an input, Liquid decides promote or hold, RawTree keeps the probation history.
+- Test: fraction of planted claims that reach the working set.
+- Hardest assumption: honest planting without simulating the whole problem. Borderline. Strong mechanism, but the disaster is abstract on screen.
+
+**6. Fuel Gauge**
+- Pitch: an agent under a shrinking token ration completes a long task by evicting to survive.
+- Demo: a gauge drops, the curator evicts, work continues.
+- Eliminated: this is budget management dressed as a metaphor, and the prompt is explicit that budget tricks are not novelty.
+
+**Selection**
+
+| Idea | Theme | Demo | Sponsors | Feasible | Different | Total |
+|---|---|---|---|---|---|---|
+| Pull the Plug | 5 | 5 | 4 | 4 | 3 | 21 |
+| Unlearn | 5 | 4 | 5 | 4 | 5 | 23 |
+| Quarantine | 4 | 3 | 5 | 3 | 4 | 19 |
+| Shift Change | 4 | 3 | 3 | 4 | 2 | 16 |
+
+Top two are Pull the Plug and Unlearn. They share a domain and a state schema, so building one makes the other cheap.
+
+Stronger pick is Unlearn. It is the only idea where deletion is the hero rather than persistence. The five-of-five scoreboard is honest, deterministic, and legible in five seconds. Every sponsor removal breaks a specific visible thing. Its differentiation, as a proposal, is that supersede is a first-class patch type with recall, not a summary.
+
+Why it might still lose. If the full-context baseline happens to write v2 code, the demo collapses, so verify the baseline fails on real cached results before committing. Judges may also read it as narrow to one library. The mitigation is to run the kill-button scene from Pull the Plug as the final ten seconds of the same demo, which the shared ledger makes possible, but only if the core five tasks are green by hour three.

@@ -1,0 +1,136 @@
+# Black Forest Labs
+
+- [The frontier of visual intelligence](https://docs.bfl.ml/quick_start/introduction.md): FLUX models generate and edit images and video, render synchronized audio, and drive robotics. State-of-the-art quality and creative control, through one API.
+- [Quick Start](https://docs.bfl.ml/quick_start/get_started.md): Get started with FLUX in minutes — use the API to build and integrate directly, or connect via MCP for instant image generation inside your AI tools.
+- [Overview](https://docs.bfl.ml/quick_start/pricing.md): Credit-based pricing for all FLUX models including FLUX 3, FLUX.2, FLUX.1, and batch requests. 1 credit equals $0.01 USD.
+- [Organizations & Projects](https://docs.bfl.ml/account_management/organizations_projects.md): Organize your teams, manage API keys, and control access with Organizations and Projects.
+- [Team Management](https://docs.bfl.ml/account_management/team_management.md): Invite team members, assign roles, and manage access to your organizations and projects.
+- [Credits & Billing](https://docs.bfl.ml/account_management/credits_billing.md): Add credits, track usage, and handle billing for your organization
+- [FLUX 3](https://docs.bfl.ml/flux_3/flux3_overview.md): Generate video with synchronized audio using FLUX 3, edit an existing clip with FLUX Video Edit [fast], or run FLUX 3 Action, the open-weights action mode.
+- [Video](https://docs.bfl.ml/flux_3/flux3_video.md): Generate, animate, and continue video with FLUX 3. Edit existing footage with the separate FLUX Video Edit [fast] tool.
+- [FLUX 3 Action](https://docs.bfl.ml/flux_3/flux3_action_overview.md): 7B open weights world action model. Turn FLUX's visual intelligence into action for your robot, simulator, or game.
+- [FLUX 3 Action](https://docs.bfl.ml/flux_3/flux3_action_overview.md): 7B open weights world action model. Turn FLUX's visual intelligence into action for your robot, simulator, or game.
+- [Run FLUX 3 Action](https://docs.bfl.ml/flux_3/flux3_action_inference.md): Run a first prediction on recorded data, then connect FLUX 3 Action to your control loop.
+- [Fine-tune FLUX 3 Action](https://docs.bfl.ml/flux_3/flux3_action_finetuning.md): Prepare demonstrations, train a custom action policy, and export it for evaluation.
+- [SO-101 with LeRobot](https://docs.bfl.ml/flux_3/flux3_action_so101.md): Train a task LoRA, preserve the checkpoint’s camera and control conventions, and evaluate it on your SO-101.
+- [Example: FLUX 3 Action plays video games](https://docs.bfl.ml/flux_3/flux3_action_games.md): Train FLUX 3 Action on scripted demonstrations of a shooter and a racing game, then compare its performance with the bots.
+- [Example: teach FLUX 3 Action to fly a drone](https://docs.bfl.ml/flux_3/flux3_action_drone.md): Fine-tune FLUX 3 Action to follow drone flight instructions in Isaac Sim, then evaluate it on new layouts and reworded instructions.
+- [Overview](https://docs.bfl.ml/flux_2/flux2_overview.md): FLUX.2 model family overview — from sub-second generation to highest quality, with multi-reference editing, color control, and up to 4MP output.
+- [FLUX.2 Image Editing](https://docs.bfl.ml/flux_2/flux2_image_editing.md): Edit images with FLUX.2 using text prompts and multi-reference support for up to 10 images, with advanced controls and up to 4MP output.
+- [FLUX.2 Text to Image](https://docs.bfl.ml/flux_2/flux2_text_to_image.md): FLUX.2 is the recommended model for text-to-image generation. Generate high-fidelity images with advanced control, exact colors, and flexible aspect ratios.
+- [FLUX Video Edit](https://docs.bfl.ml/flux_tools/flux_video_edit.md): Edit an existing clip with a prompt: remove, add or replace objects, change the setting, restyle, change text or dialogue.
+- [FLUX Video Upscale](https://docs.bfl.ml/flux_tools/flux_video_upscale.md): Upscale videos to 1080p, 2K, or 4K via API. FLUX 3 powered super-resolution with a precise mode and a creative detail-enhancement mode.
+- [FLUX Outpainting](https://docs.bfl.ml/flux_tools/flux_outpainting.md): Expand any image beyond its borders in a single call.
+- [FLUX Erase](https://docs.bfl.ml/flux_tools/flux_erase.md): Remove objects from a photo via API — fast, mask-driven cleanup powered by FLUX.2 Klein 9B.
+- [FLUX Deblur](https://docs.bfl.ml/flux_tools/flux_deblur.md): Sharpen blurry images via API while preserving the original scene, character identity, colors, and composition.
+- [FLUX Virtual Try-On (VTO)](https://docs.bfl.ml/flux_tools/flux_vto.md): Generate virtual try-on results from a person image plus one or more garment references.
+- [FLUX API Integration Guide](https://docs.bfl.ml/api_integration/integration_guidelines.md): Essential guide for integrating with FLUX API endpoints, including endpoint selection, polling, and content handling.
+- [FLUX MCP server](https://docs.bfl.ml/api_integration/mcp_integration.md): Generate images and video, edit, vary, browse, and reuse FLUX results from any MCP-compatible client. OAuth sign-in, no API keys to manage.
+- [Errors](https://docs.bfl.ml/api_integration/errors.md): Reference for HTTP status codes and response types returned by the FLUX API, including error handling guidance.
+- [FLUX.2 [klein] Training](https://docs.bfl.ml/flux_2/flux2_klein_training.md): Fine-tune FLUX.2 [klein] models with custom datasets using LoRA training for specialized image generation.
+- [FLUX.2 [klein] Style Training](https://docs.bfl.ml/flux_2/flux2_klein_training_example.md): Technical guide for training style LoRAs on FLUX.2 [klein] models with a Graphic Impressions style example
+- [Introduction](https://docs.bfl.ml/kontext/kontext_overview.md): Overview of FLUX.1 Kontext, a model that combines text-to-image generation with context-aware image editing. For new projects, we recommend FLUX.2.
+- [Image Generation](https://docs.bfl.ml/kontext/kontext_text_to_image.md): Generate images from text prompts using FLUX.1 Kontext. For new projects, we recommend FLUX.2 for text-to-image generation.
+- [Image Editing](https://docs.bfl.ml/kontext/kontext_image_editing.md): FLUX.1 Kontext image editing model. For new projects, we recommend FLUX.2 with multi-reference support and up to 4MP output.
+- [FLUX1.1 [pro] Image Generation](https://docs.bfl.ml/flux_models/flux_1_1_pro.md): Generate images with FLUX1.1 [pro], a fast and reliable text-to-image model with strong prompt adherence and competitive pricing.
+- [FLUX1.1 [pro] Ultra Mode](https://docs.bfl.ml/flux_models/flux_1_1_pro_ultra_raw.md): Generate up to 4MP resolution images with FLUX1.1 [pro] Ultra, featuring Raw mode for candid photography and image-to-image support.
+- [FLUX.1 Fill [pro]](https://docs.bfl.ml/flux_1_fill.md): Use FLUX.1 Fill for text-driven inpainting and outpainting to edit image regions or extend borders.
+- [Cookbook](https://docs.bfl.ml/cookbook/overview.md): Runnable FLUX recipes, with the output they produced.
+- [Video quickstart](https://docs.bfl.ml/cookbook/video_quickstart.md): Your first FLUX 3 video with synchronized audio: submit, poll, download, and the settings that matter.
+- [Start a video from images](https://docs.bfl.ml/cookbook/video_start_from_images.md): Pin a still as the exact opening frame, pin both ends of time, or steer identity with reference images.
+- [Recast and continue video](https://docs.bfl.ml/cookbook/video_edit_recast_continue.md): Carry a clip's cast into a new shot, swap its medium, or extend it into the next beat.
+- [Multi-shot films](https://docs.bfl.ml/cookbook/video_multishot_films.md): Direct cuts inside one generation, run a concurrent shot pipeline, and cut a finished film.
+- [Video Generation with FLUX](https://docs.bfl.ml/guides/prompting_video_overview.md): Learn how to prompt FLUX 3 for text-to-video, image-to-video, clip extension, and video editing workflows
+- [Text-to-Video](https://docs.bfl.ml/guides/prompting_video_text_to_video.md): Learn how to prompt FLUX 3 for text-to-video generation with stronger action, camera language, pacing, lighting, and scene continuity.
+- [Audio and speech](https://docs.bfl.ml/guides/prompting_video_audio.md): Learn how to prompt FLUX 3 for dialogue, voiceover, ambience, sound effects, music, and voice direction.
+- [Image-to-Video](https://docs.bfl.ml/guides/prompting_video_image_to_video.md): Animate a still image with FLUX 3 — pin a startframe, set a start and end frame, or interpolate through several keyframes.
+- [Video Editing](https://docs.bfl.ml/guides/prompting_video_editing.md): How to word an edit for FLUX Video Edit [fast]: say what changes, place what you add, fit dialogue to the clip, and turn blockouts, settings and styles into finished shots.
+- [Examples & Cheatsheet](https://docs.bfl.ml/guides/prompting_video_camera_terms.md): A compact FLUX 3 reference for shot sizes, angles, composition, movement, and focus prompts.
+- [FLUX Prompting Guide](https://docs.bfl.ml/guides/prompting_summary.md): Learn how to prompt FLUX — from the basics to advanced techniques.
+- [Prompting Basics](https://docs.bfl.ml/guides/prompting_unified_basics.md): Core concepts and foundational knowledge for prompting FLUX models
+- [Building a Good Prompt](https://docs.bfl.ml/guides/prompting_unified_building.md): How FLUX reads prompts and how to structure them into clear, controllable image instructions
+- [Style, Aesthetics & Text](https://docs.bfl.ml/guides/prompting_unified_style.md): Style keywords, photorealistic looks, illustration styles, and how to get readable text in images
+- [Technical Parameters](https://docs.bfl.ml/guides/prompting_unified_technical.md): Aspect ratios and working without negative prompts
+- [Prompt Reference](https://docs.bfl.ml/guides/prompting_unified_reference.md): Cheat sheet with camera terms, lighting and style keywords, and ready-to-use example prompts
+- [Image Editing](https://docs.bfl.ml/guides/prompting_editing_overview.md): Overview of image editing with FLUX.2 — swap backgrounds, replace objects, transfer styles, and combine multi-reference images in natural language.
+- [Single-Reference Editing](https://docs.bfl.ml/guides/prompting_editing_single_reference.md): How to edit images using a single reference with FLUX.2
+- [Multi-Reference Editing](https://docs.bfl.ml/guides/prompting_editing_multi_reference.md): Combine multiple input images for style transfer, composites, and editorial scenes
+- [Use Cases](https://docs.bfl.ml/guides/prompting_unified_usecases.md): Real-world applications from marketing and design to e-commerce and image editing
+- [Photorealistic Images](https://docs.bfl.ml/guides/usecases_t2i_photorealistic.md): Generate photorealistic images with FLUX.2 across macro photography, cinematic landscapes, and documentary scenes using lens and lighting prompts.
+- [HEX Color Code Prompting](https://docs.bfl.ml/guides/usecases_t2i_hex_color_prompting.md): Use hex color codes in FLUX.2 prompts for precise color matching — ideal for brand consistency, design work, and exact color control.
+- [JSON Structured Prompting](https://docs.bfl.ml/guides/usecases_t2i_json_prompting.md): Use structured JSON prompts for precise control over complex scenes
+- [Typography & Design](https://docs.bfl.ml/guides/usecases_t2i_typography_design.md): Generate clean typography, product ads, magazine covers, and posters with FLUX.2
+- [Infographics](https://docs.bfl.ml/guides/usecases_t2i_infographics.md): Generate clean, structured infographics with FLUX by specifying layout, content hierarchy, icons, and color palette in your prompts.
+- [Multi-Language Prompting](https://docs.bfl.ml/guides/usecases_t2i_multi_language.md): Prompt FLUX.2 in native languages for culturally authentic results
+- [World Knowledge](https://docs.bfl.ml/guides/usecases_t2i_world_knowledge.md): Leveraging FLUX's world knowledge in image generation
+- [UI Mockups](https://docs.bfl.ml/guides/usecases_t2i_ui_mockups.md): Generate website layouts, app interfaces, and game UI mockups with FLUX from descriptive prompts about structure and visual style.
+- [Product Mockups](https://docs.bfl.ml/guides/usecases_t2i_product_mockups.md): Creating product mockups with transparent backgrounds and label integrity using FLUX
+- [Style Transfer](https://docs.bfl.ml/guides/usecases_editing_style_transfer.md): Re-render images in different artistic mediums with FLUX.2 image editing while preserving original composition, subject, and key details.
+- [Fashion](https://docs.bfl.ml/guides/usecases_editing_clothing_tryon.md): Change outfits, add accessories, and recolor garments on existing photos with FLUX.2, using hex color codes for precise control.
+- [Drawing to Image (Rendering)](https://docs.bfl.ml/guides/usecases_editing_drawing_rendering.md): Rendering drawings into images with FLUX editing
+- [Lighting and Weather Transformation](https://docs.bfl.ml/guides/usecases_editing_lighting_weather.md): Transforming lighting and weather in images with FLUX editing
+- [Object Removal](https://docs.bfl.ml/guides/usecases_editing_object_removal.md): Cleanly remove objects, watermarks, and blemishes from images with FLUX.2 image editing while seamlessly filling the surrounding background.
+- [Interior Design](https://docs.bfl.ml/guides/usecases_editing_interior_design.md): Use FLUX.2 to repaint walls, swap flooring, restyle rooms, and adjust lighting in existing interior photos for instant design visualization.
+- [Product Consistency](https://docs.bfl.ml/guides/usecases_editing_product_consistency.md): Maintaining product consistency across image edits with FLUX
+- [Character & Style Consistency](https://docs.bfl.ml/guides/usecases_editing_character_consistency.md): Maintaining consistent characters and styles across image edits with FLUX
+- [Insert the Person Into a Scene](https://docs.bfl.ml/guides/usecases_editing_person_in_scene.md): Inserting a person into a scene with FLUX editing
+- [Multi-Image Referencing and Compositing](https://docs.bfl.ml/guides/usecases_editing_multi_image_compositing.md): Multi-image referencing and compositing with FLUX editing
+- [Pose & Layout Guidance](https://docs.bfl.ml/guides/usecases_editing_controlnets.md): Use reference images to control pose, composition, and spatial layout in FLUX
+- [Get Result](https://docs.bfl.ml/api-reference/utility/get-result.md): An endpoint for getting generation task result.
+- [Get the user's credits](https://docs.bfl.ml/api-reference/get-the-users-credits.md): Get the user's credits
+- [Generate a video with FLUX 3](https://docs.bfl.ml/api-reference/utility/generate-a-video-with-flux-3.md): Submits a video generation task to FLUX 3 via the harness. The mode is explicit: t2v (`text-to-video`), i2v (`image-continuation`, keyframes), v2v (`video-continuation`, start_video), or draft_enhance (`draft-enhance`, full-quality render of a prior draft's `draft_cache`); the spelled-out aliases ar…
+- [Generate or edit an image with FLUX.2 [max]](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[max].md): Submits an image generation or editing task with FLUX.2 [max]. Highest quality FLUX.2 model for image generation and editing, with the strongest editing consistency and prompt following.
+- [Generate or edit an image with FLUX.2 [pro]](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[pro].md): Submits an image generation or editing task with FLUX.2 [pro]. This is the recommended default model for image editing and generation. Supports text-to-image and image-to-image editing workflows.
+- [Generate or edit an image with FLUX.2 [pro] (preview)](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[pro]-preview.md): Submits an image generation or editing task with the FLUX.2 [pro] preview endpoint, where our latest quality and speed improvements land first. For stable production use, prefer FLUX.2 [pro] (/flux-2-pro).
+- [Generate or edit an image with FLUX.2 [flex]](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[flex].md): Submits an image generation or editing task with FLUX.2 [flex]. Specialized for typography and text rendering, and for preserving small details. Supports text-to-image and image-to-image editing workflows.
+- [Generate or edit an image with FLUX.2 [klein] 9B (preview)](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[klein]-9b-preview.md): Submits an image generation or editing task with the FLUX.2 [klein] 9B preview endpoint, where our latest quality and speed improvements land first. For stable production use, prefer FLUX.2 [klein] 9B (/flux-2-klein-9b).
+- [Generate or edit an image with FLUX.2 [klein] 9B](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[klein]-9b.md): Submits an image generation or editing task with FLUX.2 [klein] 9B. Sub-second inference with open weights, balancing quality and speed.
+- [Generate or edit an image with FLUX.2 [klein] 4B](https://docs.bfl.ml/api-reference/models/generate-or-edit-an-image-with-flux2-[klein]-4b.md): Submits an image generation or editing task with FLUX.2 [klein] 4B. The fastest, most lightweight FLUX.2 model, with open weights that run on consumer GPUs.
+- [Edit a video](https://docs.bfl.ml/api-reference/tools/video-edit.md): Transform a source clip with an edit instruction. The server sets duration, resolution, aspect ratio, and audio from the source; sources larger than 720p are downscaled to 720p. This endpoint does not accept FLUX 3 generation controls such as mode, version, seed, or generate_audio.
+- [Upscale a video with FLUX 3.](https://docs.bfl.ml/api-reference/models/upscale-a-video-with-flux-3.md): Submits a video upscaling task: 1.5x-3x super-resolution of the source clip (up to 2560x1440 in, 13.75 MP output frames). The upscale covers the first 20 seconds of the source; clips well past that are rejected. `creativity` selects precise source-faithful upscaling (0) or creative detail enhancemen…
+- [Outpaint or extend an image](https://docs.bfl.ml/api-reference/models/outpaint-or-extend-an-image.md): Submits an outpainting task. The input image is placed on a (width, height) canvas at the given offset, and the surrounding region is generated by a FLUX outpainting model.
+- [Erase an object from an image](https://docs.bfl.ml/api-reference/models/erase-an-object-from-an-image.md): Submits an erase task using an input image and a mask identifying the object or region to remove.
+- [Remove blur from an image](https://docs.bfl.ml/api-reference/models/remove-blur-from-an-image.md): Submits a deblur task. The input image is regenerated by a FLUX blur-removal model to sharpen it while preserving the original scene, objects, composition, and lighting. No prompt needed.
+- [Virtual try-on (v2)](https://docs.bfl.ml/api-reference/models/virtual-try-on-v2.md): Submits a virtual try-on task against the v2 model. Identical request shape to /vto-v1, with reference and output resolution supported up to 4MP. Person and garment images are mapped to the underlying input image slots. An edit instruction is generated from the person and garment images, with the su…
+- [Virtual try-on](https://docs.bfl.ml/api-reference/models/virtual-try-on.md): Submits a virtual try-on task. Person and garment images are mapped to the underlying input image slots; prompts steer attribute transfer.
+- [Edit or create an image with FLUX.1 Kontext [pro]](https://docs.bfl.ml/api-reference/models/edit-or-create-an-image-with-flux1-kontext-[pro].md): Submits an image creation task with FLUX.1 Kontext [pro]. For image editing, prefer FLUX.2 [pro] (/flux-2-pro) or FLUX.2 [flex] (/flux-2-flex) which are the recommended default models for editing workflows.
+- [Edit or create an image with FLUX.1 Kontext [max]](https://docs.bfl.ml/api-reference/models/edit-or-create-an-image-with-flux1-kontext-[max].md): Submits an image creation task with FLUX.1 Kontext [max]. For image editing, prefer FLUX.2 [pro] (/flux-2-pro) or FLUX.2 [flex] (/flux-2-flex) which are the recommended default models for editing workflows.
+- [Generate an image with FLUX1.1 [pro]](https://docs.bfl.ml/api-reference/models/generate-an-image-with-flux11-[pro].md): Submits an image generation task with FLUX1.1 [pro].
+- [Generate an image with FLUX1.1 [pro] ultra mode](https://docs.bfl.ml/api-reference/models/generate-an-image-with-flux11-[pro]-ultra-mode.md): Submits an image generation task with FLUX1.1 [pro] with ultra mode and optional raw mode.
+- [Generate an image with FLUX.1 [dev]](https://docs.bfl.ml/api-reference/models/generate-an-image-with-flux1-[dev].md): Submits an image generation task with FLUX.1 [dev].
+- [Inpaint an image with FLUX.1 Fill [pro] using an input image and mask](https://docs.bfl.ml/api-reference/models/inpaint-an-image-with-flux1-fill-[pro]-using-an-input-image-and-mask.md): Submits an image generation task with the FLUX.1 Fill [pro] model using an input image and mask. Mask can be applied to alpha channel or submitted as a separate image.
+- [Expand an image with FLUX.1 Expand [pro] by adding pixels on any side](https://docs.bfl.ml/api-reference/models/expand-an-image-with-flux1-expand-[pro]-by-adding-pixels-on-any-side.md): Submits an image expansion task that adds the specified number of pixels to any combination of sides (top, bottom, left, right) while maintaining context.
+- [Finetune Details](https://docs.bfl.ml/api-reference/utility/finetune-details.md): Get details about the training parameters and other metadata connected to a specific finetune_id that was created by the user.
+- [My Finetunes](https://docs.bfl.ml/api-reference/utility/my-finetunes.md): List all finetune_ids created by the user
+- [Delete Finetune](https://docs.bfl.ml/api-reference/utility/delete-finetune.md): Delete a finetune_id that was created by the user
+- [Generate an image with FLUX 1.1 [pro] finetune with ultra mode.](https://docs.bfl.ml/api-reference/models/generate-an-image-with-flux-11-[pro]-finetune-with-ultra-mode.md): Submits an image generation task with FLUX 1.1 [pro] finetune with ultra mode.
+- [Generate an image with FLUX.1 Fill [pro] finetune using an input image and mask.](https://docs.bfl.ml/api-reference/models/generate-an-image-with-flux1-fill-[pro]-finetune-using-an-input-image-and-mask.md): Submits an image generation task with the FLUX.1 Fill [pro] finetune model using an input image and mask. Mask can be applied to alpha channel or submitted as a separate image.
+- [Report Model Usage](https://docs.bfl.ml/api-reference/models/report-model-usage.md)
+- [Release Notes](https://docs.bfl.ml/release-notes.md): Latest FLUX model releases, API changes, performance upgrades, and feature announcements from Black Forest Labs.
+- [Video Generation with FLUX](https://docs.bfl.ml/guides/prompting_video_overview.md): Learn how to prompt FLUX 3 for text-to-video, image-to-video, clip extension, and video editing workflows
+- [Text-to-Video](https://docs.bfl.ml/guides/prompting_video_text_to_video.md): Learn how to prompt FLUX 3 for text-to-video generation with stronger action, camera language, pacing, lighting, and scene continuity.
+- [Audio and speech](https://docs.bfl.ml/guides/prompting_video_audio.md): Learn how to prompt FLUX 3 for dialogue, voiceover, ambience, sound effects, music, and voice direction.
+- [Image-to-Video](https://docs.bfl.ml/guides/prompting_video_image_to_video.md): Animate a still image with FLUX 3 — pin a startframe, set a start and end frame, or interpolate through several keyframes.
+- [Video Editing](https://docs.bfl.ml/guides/prompting_video_editing.md): How to word an edit for FLUX Video Edit [fast]: say what changes, place what you add, fit dialogue to the clip, and turn blockouts, settings and styles into finished shots.
+- [Examples & Cheatsheet](https://docs.bfl.ml/guides/prompting_video_camera_terms.md): A compact FLUX 3 reference for shot sizes, angles, composition, movement, and focus prompts.
+- [FLUX Prompting Guide](https://docs.bfl.ml/guides/prompting_summary.md): Learn how to prompt FLUX — from the basics to advanced techniques.
+- [Prompting Basics](https://docs.bfl.ml/guides/prompting_unified_basics.md): Core concepts and foundational knowledge for prompting FLUX models
+- [Building a Good Prompt](https://docs.bfl.ml/guides/prompting_unified_building.md): How FLUX reads prompts and how to structure them into clear, controllable image instructions
+- [Style, Aesthetics & Text](https://docs.bfl.ml/guides/prompting_unified_style.md): Style keywords, photorealistic looks, illustration styles, and how to get readable text in images
+- [Technical Parameters](https://docs.bfl.ml/guides/prompting_unified_technical.md): Aspect ratios and working without negative prompts
+- [Prompt Reference](https://docs.bfl.ml/guides/prompting_unified_reference.md): Cheat sheet with camera terms, lighting and style keywords, and ready-to-use example prompts
+- [Image Editing](https://docs.bfl.ml/guides/prompting_editing_overview.md): Overview of image editing with FLUX.2 — swap backgrounds, replace objects, transfer styles, and combine multi-reference images in natural language.
+- [Single-Reference Editing](https://docs.bfl.ml/guides/prompting_editing_single_reference.md): How to edit images using a single reference with FLUX.2
+- [Multi-Reference Editing](https://docs.bfl.ml/guides/prompting_editing_multi_reference.md): Combine multiple input images for style transfer, composites, and editorial scenes
+- [Use Cases](https://docs.bfl.ml/guides/prompting_unified_usecases.md): Real-world applications from marketing and design to e-commerce and image editing
+
+## OpenAPI Specs
+
+- [openapi](https://api.bfl.ai/openapi.json)
+- [openapi](https://api.bfl.ai/v1/licenses/docs/openapi.json)
+- [video-edit](/openapi/video-edit.json)
+
+## Optional
+
+- [BFL Homepage](https://bfl.ai)
+- [Help Center](https://help.bfl.ai)

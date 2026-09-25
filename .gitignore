@@ -1,0 +1,9 @@
+# scrape cache and local artifacts
+.firecrawl/
+.DS_Store
+node_modules/
+models/
+*.gguf
+.env
+.env.*
+__pycache__/

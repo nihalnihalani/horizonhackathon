@@ -1,0 +1,26 @@
+You are the ideation specialist for a Long Horizon Agents hackathon. Generate SIX bold, surprising, buildable project ideas and select the strongest TWO. The user explicitly wants Fable ideation. Do not use tools, make network calls, edit files, or claim new research. Treat the verified sponsor capabilities below as your sole product/API facts. Output at most 1600 words.
+
+THEME: Long-horizon agents accumulate observations, actions, and stale context. Growing histories slow them down, increase cost and make state unreliable. Build explicit mutable state; agents that edit their working context; a split between durable and discardable information. The system must remain reliable across minutes, hours and days.
+
+CONSTRAINTS:
+- Five-hour hackathon build, one highly polished 90-second demo; small team. Existing web frontend scaffold assumed but no architecture implementation.
+- Exactly THREE sponsor integrations in every idea: Tinybird/RawTree, Nimble, Liquid AI. Every sponsor must be load-bearing, with removing it breaking something specific in the demo. Firecrawl is being used for pre-build research, not a fourth runtime integration.
+- User rejected previous ASOF idea as BORING. ASOF was a research dashboard showing bitemporal beliefs and a time slider, with stale funding rumors. Do not repackage ASOF, generic agent memory dashboards, memory CRUD, or research-monitoring dashboards. Escape the predictable monitoring and debugging categories.
+- Need visible, emotionally legible payoff. The audience should understand the disaster and recovery in 5 seconds. Examples of the required boldness are a flight recorder, pit crew, memory transplant, escape room, expedition, continuity under catastrophe, digital organism—but choose novel concepts rather than merely metaphor skins.
+- The LLM must truly work over typed mutable state and a bounded working set. Storytelling must reveal this, not conceal it. Long elapsed time may use clearly labeled accelerated replay of real recorded runs. No made-up benchmark gains, no fake live web changes, no intentionally broken baseline. User-injected disturbances can be labeled as test events. No life-critical autonomous deployments. External actions should be dry-run or approval gated.
+- Aim to win on theme fit + obvious product value + a memorable scene + honest deterministic evaluation, not maximum feature count. A higher context budget or summarization alone is not novelty. Do not claim novelty globally; state differentiation as an informed proposal.
+
+SPONSOR FACTS (from local docs/briefs):
+1. RawTree is an analytics database with JSON event ingest, read-only SQL, latest-state reconstruction from append-only patches using argMax, arbitrary event data, tracing. It is NOT a mutable transactional SQL store: represent mutable agent state as a current materialized projection of append-only patches. Query API has no bind parameters, so allowlist identifiers/values. SQL triggers require admin + enabled service, so don't depend on them. A simple local typed state projection is fine, but durable reconstruction and selective recall from RawTree must matter to core behavior.
+2. Nimble provides real-time web search/extract/crawl, and async Web Search Agents returning structured output_schema plus per-claim trust reports with citations/excerpts. Effort low/medium is better for demos; default high can take 5–15 min. Search-result trust confidence is a useful input, NOT an oracle of correctness. Cache real results for repeatable replay; provenance needs to remain accessible after raw page text leaves prompt.
+3. Liquid LFM2.5-1.2B-Instruct is a local compact model with tool calling and structured output; run using llama-server with Jinja templates / constrained JSON output. Use it for a narrow curator/editor (classify same-key observations, propose keep/evict/supersede patches), bounded context, deterministic validation. NOT an all-capable planner. An ordinary planner model may be local/available infrastructure, without positioning it as another sponsor. No model training or exotic infra in 5 hours.
+
+FOR EACH IDEA provide:
+- Short name; one-sentence pitch; who needs it and tangible failure it prevents.
+- Exact emotional 90-second demo beat: objective -> disturbance -> visible failure risk -> surprising recovery -> measurable outcome.
+- Typed durable state / discarded context / selective recall policy, especially one decision that shows intelligent forgetting rather than logging everything.
+- Three sponsor jobs with a counterfactual removal test.
+- Five-hour MVP cuts and concrete deterministic test, including fair baseline and what measurement can actually prove.
+- Hardest technical assumption and how to reduce its risk.
+
+Then select top TWO with a compact comparison table (theme fit, demo impact, sponsor fit, build feasibility, differentiation; 1-5 subjective scores), tell us the stronger pick and why it might still lose. Be critical: eliminate ideas that require simulating the entire problem or decorating a memory dashboard. Distinguish actual claims from proposals. Include one strong contrarian approach where deliberate deletion makes the agent better, and one strong continuity/crash-recovery concept.

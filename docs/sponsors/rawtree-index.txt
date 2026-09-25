@@ -1,0 +1,32 @@
+# RawTree > RawTree is an analytics database for unstructured data. Send events without upfront schema setup, query them with SQL, and inspect logs from agents, scripts, and humans.
+
+## Command line tool
+
+Install and use the RawTree CLI from the terminal.
+
+- [Install](https://rawtree.com/install.sh)
+- [Repository](https://github.com/rawtreedb/rawtree-cli)
+
+## Documentation
+
+The llms.txt file containing all RawTree documentation.
+
+- [Full documentation](https://rawtree.com/docs/llms.txt)
+
+## Skills
+
+Best practices for using RawTree from agents.
+
+- [RawTree](https://github.com/rawtreedb/agent-skills/blob/main/skills/rawtree/SKILL.md)
+
+## Authentication
+
+How agents should find, use, and protect RawTree credentials.
+
+- [Agent authentication](https://rawtree.com/auth.md)
+
+## OpenAPI spec
+
+The full OpenAPI specification for the RawTree API.
+
+- [OpenAPI spec (JSON)](https://rawtree.com/openapi.json)
