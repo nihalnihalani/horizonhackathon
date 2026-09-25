@@ -47,6 +47,8 @@ Schedule: 9:30 doors · 11:00 kickoff · 1:30 lunch · **4:30 submission** · 5:
 
 → 5 of the 10 judges are from Liquid, Nimble or Tinybird. **Stacking those three sponsors in one project** is the highest-expected-value strategy. The judges from Gap, Airbyte, LinkedIn and Razorpay are data and infra engineers, so they will reward a clean event-sourced architecture plus real metrics.
 
+> **Build plan:** the project is now **Dead Reckoning**; the detailed hour-by-hour plan, roles, repo layout, demo script and gates are in [docs/plan/DEAD_RECKONING_PLAN.md](docs/plan/DEAD_RECKONING_PLAN.md) (with four supporting analyses in the same folder).
+
 > **Deep research:** see [docs/research/WINNING_IDEAS.md](docs/research/WINNING_IDEAS.md) for 2026 findings with numbers (VISTA, SelfCompact, Compaction Cliff, MAGE, Scroll), past hackathon winners in this space, and 6 ranked ideas. Its #1 idea, "Proprioceptive Ledger", extends the project below.
 
 ## 4. Recommended project: **"Ledger": an event-sourced, self-curating research agent**
