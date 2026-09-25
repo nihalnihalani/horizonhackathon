@@ -13,7 +13,10 @@ import {
   type Arm, type CanonicalEventSink, type CommandKind, type ConfigOf, type CrashPoint, type DeskClient, type EventType,
   type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
 } from "@dr/shared";
-import { RawTreeClient, RawTreeLoader, RawTreeSink, applyRow, emptyProjection, totalRows, waitForRow } from "@dr/storage";
+import {
+  RawTreeClient, RawTreeEventLog, RawTreeLoader, RawTreeSink, applyEvent, applyRow, emptyProjection, restoreFromEvents, totalRows,
+  waitForRow, writeCheckpoint,
+} from "@dr/storage";
 import { HttpDeskClient } from "@dr/kernel/desk-client";
 import {
   commandArgsHash, decideArmCrash, decideCancel, decideClaim, decideCommand, decidePause, decideResume, isRefusal,
@@ -56,6 +59,8 @@ export type ActorOptions = {
   /** bounded polling before exposing reconciliationStatus=blocked */
   reconcile?: { polls: number; intervalMs: number };
   statusUrl?: () => Promise<string> | string;
+  /** write a mission_checkpoints row after each commitment outcome (default true for the RawTree log) */
+  checkpoints?: boolean;
 };
 
 type Listener = (e: SseEnvelope) => void;
@@ -80,6 +85,8 @@ export class MissionActor {
   private createCommands = new Map<string, { argsHash: string; result: CommandResult }>();
   private rawtreeOk = true;
   readonly cache = new Map<string, Projection>();
+  /** Event-derived projection per mission (applyEvent over every acked event); source of checkpoints. */
+  private canon = new Map<string, Projection>();
   readonly missions: Partial<Record<Arm, Mission>> = {};
   readonly byId = new Map<string, Mission>();
 
@@ -124,12 +131,30 @@ export class MissionActor {
     try {
       const r = await this.events.append(ev);
       this.rawtreeOk = true;
+      await this.afterEvent(m, ev);
       m.updatedAt = ev.writtenAt;
       this.publish("worker", { kind: "event", type, revision: r.revision }, { run_id: m.run_id, arm: m.arm });
       return r.revision;
     } catch (e) {
       this.rawtreeOk = false;
       throw e instanceof AckError ? e : new AckError(`event append failed: ${(e as Error).message}`);
+    }
+  }
+
+  /** Keep the event-derived projection current; checkpoint after each commitment outcome (CONTRACTS §4 step 5). */
+  private async afterEvent(m: Mission, ev: ReturnType<typeof makeEvent>): Promise<void> {
+    const p = this.canon.get(m.run_id) ?? emptyProjection(m.run_id);
+    try { applyEvent(p, ev); } catch (e) { this.log(`event reducer: ${(e as Error).message}`, m.arm, m.run_id); return; }
+    this.canon.set(m.run_id, p);
+    const payload = ev.payload as { table?: string; row?: { status?: string } };
+    const outcome = ev.type === "OUTCOME_RECORDED" && payload.table === "commitments" && payload.row?.status !== "intent";
+    if (!outcome || !(this.opts.checkpoints ?? this.events instanceof RawTreeEventLog)) return;
+    try {
+      await writeCheckpoint(this.client, m.run_id, ev.revision, structuredClone(p), ev);
+      this.log(`checkpoint ${m.run_id}@${ev.revision} written`, m.arm, m.run_id);
+    } catch (e) {
+      // A missing checkpoint only lengthens replay; restore falls back to an earlier one or full event replay.
+      this.log(`checkpoint ${m.run_id}@${ev.revision} not written (${(e as Error).message}); restore will replay events`, m.arm, m.run_id);
     }
   }
 
@@ -211,14 +236,30 @@ export class MissionActor {
     assertRunId(runId);
     const arm = this.armOf(runId);
     this.cache.delete(runId);
-    const p = await this.loader.load(runId);
-    const n = totalRows(p);
     const m = this.byId.get(runId);
+    // S10: a parent-retained ambiguous append is resolved by its original id/hash before anything is restored.
+    const pend = await this.events.resolvePending(runId);
+    if (pend === "blocked") throw new AckError(`pending canonical append for ${runId} is unresolved; restore and new revisions blocked`);
+    const rows = await this.loader.load(runId);
+    let p = rows;
+    let source = "legacy row tables";
+    const watermark = this.events.watermark(runId);
+    if (this.events instanceof RawTreeEventLog && watermark > 0) {
+      // Canonical restore: latest valid checkpoint ≤ watermark + contiguous ordered events. Gaps/conflicts throw (block).
+      const r = await restoreFromEvents(this.client, runId, { watermark });
+      p = r.projection;
+      p.metrics = rows.metrics; // metrics are non-canonical measurements, read from their table
+      p.rows_loaded = rows.rows_loaded;
+      source = `mission_events rev ${r.revision}${r.checkpoint ? ` from checkpoint @${r.checkpoint.revision}` : ""} + ${r.eventsReplayed} events`;
+      const drift = (["commitments", "receipts", "plan_steps", "facts"] as const).filter((t) => Object.keys(p[t]).length !== Object.keys(rows[t]).length);
+      if (drift.length) this.log(`restore: row mirror differs from canonical events for ${drift.join(",")} (events win)`, m?.arm, runId);
+    }
+    const n = source.startsWith("mission_events") ? this.events.watermark(runId) : totalRows(p);
     if (m) p.mission = structuredClone(m.meta);
     this.cache.set(runId, p);
     this.revs.set(runId, Math.max(this.revs.get(runId) ?? 0, p.rev));
     if (purpose === "verdict") this.log(`verdict check: re-read ${n} rows of ${runId} from RawTree`, arm, runId);
-    else this.log(`control cache invalidated; RESTORING FROM RAWTREE… ${n} rows · epoch ${p.epoch + 1}`, arm, runId);
+    else this.log(`control cache invalidated; RESTORING FROM RAWTREE… ${n} ${source.startsWith("mission_events") ? "events" : "rows"} · epoch ${p.epoch + 1} · ${source}`, arm, runId);
     return { projection: p, rows_loaded: p.rows_loaded, total_rows: n };
   }
 
@@ -465,9 +506,9 @@ export class MissionActor {
         void this.onExit(m);
       });
     });
-    await this.setStatus(m, "restoring", `runner generation ${m.generation} pid ${m.pid}`);
     this.publish("worker", { state: "spawned", pid: m.pid, epoch: m.generation, arm: m.arm, env_keys: Object.keys(env).sort() }, { run_id: m.run_id, arm: m.arm });
     this.log(`supervisor: spawned runner pid=${m.pid} generation ${m.generation}${crash ? ` (crash armed: ${crash})` : ""} · child env keys: ${Object.keys(env).sort().join(",")}`, m.arm, m.run_id);
+    await this.setStatus(m, "restoring", `runner generation ${m.generation} pid ${m.pid}`);
   }
 
   private onChildLine(m: Mission, line: string) {

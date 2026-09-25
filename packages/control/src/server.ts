@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import { CrashPoint, Slot, loadConfig, type ApiError, type Arm, type ConfigOf } from "@dr/shared";
 import { createAgUiHandler } from "./ag-ui/handler";
+import { RawTreeClient, RawTreeEventLog } from "@dr/storage";
 import { MissionActor, type CommandResult } from "./actor.ts";
 import { createMissionPort, statusMarkdown } from "./mission-port.ts";
 
@@ -247,7 +248,11 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
 function main() {
   const cfg = loadConfig("control");
   const PORT = Number(cfg.DR_CONTROL_PORT);
-  const actor = new MissionActor(cfg, `http://${HOST}:${PORT}`, { statusUrl: resolveStatusUrl });
+  // Durable canonical events (CONTRACTS §4). DR_EVENT_LOG=memory keeps the non-durable in-memory log for offline dev.
+  const client = new RawTreeClient({ baseUrl: cfg.RAWTREE_BASE_URL, apiKey: cfg.RAWTREE_API_KEY, database: cfg.RAWTREE_DATABASE });
+  const events = process.env.DR_EVENT_LOG === "memory" ? undefined : new RawTreeEventLog(client, { visibilityDeadlineMs: 10_000, pollMs: 200 });
+  console.log(`DR control canonical event log: ${events ? "RawTree mission_events (durable)" : "in-memory (DR_EVENT_LOG=memory, NOT durable)"}`);
+  const actor = new MissionActor(cfg, `http://${HOST}:${PORT}`, { statusUrl: resolveStatusUrl, events });
   const ops = createDemoOps(cfg, actor);
   const server = createServer(createControlHandler({ actor, cfg, ops }));
   server.listen(PORT, HOST, () => console.log(`DR control listening on http://${HOST}:${PORT} (health, ag-ui, events, missions, internal/*, demo/*)`));
