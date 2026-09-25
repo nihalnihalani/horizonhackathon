@@ -239,3 +239,9 @@ Devil's advocate (dr-critic on bc73d21..40ce5e9): no P0. Dispositions:
 - F8 P3 auth hygiene: **accepted**, cheap parts assigned.
 
 Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real RawTree `mission_events` insert timed out, and the pending append was never re-resolved, so the mission stalled (`pending append … unresolved`). The fix is assigned as top priority (resolve pending by original id before the next revision). **main is unaffected.** Not done: OpenBot browser run (no database here), F1–F6 full-mission paired fixtures with crash schedules (bench covers the M1 memory trace only), planRevision increments, approvals surviving restore.
+
+### 15:12 PT update — critic fixes and live re-run (full-plan)
+
+- Critic F2 (229d207), F3–F8 (fe03812) and the pending-append stall (1abfb63) are fixed. `npm run test:unit` 168/168 and `npm run test:recovery` 17/17. Deferred from F8: operator auth on `GET /events` (the board uses a header-less EventSource) and a constant-time runner-token compare.
+- Live `./scripts/demo-f3.sh` on full-plan, runs f3-20260925-1192 (dr) and naive, with live RawTree events, OpenAI and Liquid: **10/11 checks**. Ferry receipt RECOVERED FROM DESK, site-A superseded by live Liquid, campsite repaired to site-C, DR planner input max 557 tokens vs naive 775 (monotone growth). Naive: 1 committed ferry, desk rejected closed site-A once (stale_actions 1), duplicate_effects 0 (it now shares the dispatch claim), BLOCKED. The one failure is "site-A observations via Nimble": no ngrok auth token here, so the page was a labelled direct fetch. On the demo machine, start `ngrok http 127.0.0.1:4402` first.
+- Critic recheck of F1–F8 requested; pending at time of writing.
