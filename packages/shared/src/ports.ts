@@ -42,6 +42,8 @@ export type Projection = {
   context_ops: ContextOpRow[];
   metrics: MetricRow[];
   rows_loaded: Record<TableName, number>;
+  /** Full-plan: mission lifecycle metadata derived from canonical events (absent in legacy row-only restores). */
+  mission?: import("./mission.ts").MissionMeta;
 };
 
 export interface ProjectionLoader {
