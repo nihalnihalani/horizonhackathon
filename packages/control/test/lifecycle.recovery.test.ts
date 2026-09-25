@@ -269,3 +269,30 @@ describe("finer status + per-action review (U04, U06) through HTTP", () => {
     expect(actor.missionSnapshot(id)!.availability.desk).toBe("ok");
   });
 });
+
+describe("F2: kill after_intent → operator world edit while stopped → Resume", () => {
+  it("retry with changed preconditions is not resent: step blocked precondition_changed, mission BLOCKED, 0 desk requests, exit 0", async () => {
+    const { actor, events } = await control();
+    const { id, key, m } = await prepared(actor, "after_intent", 60_000);
+    await resume(actor, id);
+    await waitFor(() => m().state === "holding", 15_000, "hold at after_intent");
+    const [k] = await actor.kill(true);
+    expect(k!.signal).toBe("SIGKILL");
+    const wv = desk.store.editWorld("site-A", "closed", "closure while stopped").world_version;
+    try {
+      expect(wv).toBeGreaterThan(1);
+      expect((await resume(actor, id)).http).toBe(202);
+      await waitFor(() => m().generation === 2 && !actor.childActive(m()), 20_000, "generation 2 exit");
+      expect(m().lastExit?.code).toBe(0);
+      await waitFor(() => m().meta.status === "blocked", 5_000, "blocked");
+      expect(m().meta.blockedReason).toMatch(/precondition_changed/);
+      expect(desk.store.ledger({ run_id: id }).requests).toHaveLength(0);
+      const statuses = fake.rows("commitments", id).filter((r) => r.action_key === key).map((r) => r.status);
+      expect(statuses).toEqual(["intent", "not_executed"]);
+      expect(fake.rows("plan_steps", id).at(-1)).toMatchObject({ step_id: "ferry", status: "blocked" });
+      assertStatusChain(events, id);
+    } finally {
+      desk.store.editWorld("site-A", "open", "");
+    }
+  });
+});
