@@ -56,6 +56,12 @@ export function explainReason(reason: string): string {
   return reason;
 }
 
+function factName(key: string): string {
+  if (key === "real.ferry") return "real ferry schedule";
+  if (key === "real.park") return "real park notices";
+  return key.replace(/^site-([A-Z])\.status$/, "Site $1 status");
+}
+
 function evictedName(id: string): string {
   const f = /^fact:site-([A-Z])\.status@/.exec(id);
   if (f) return `the pre-outage Site ${f[1]} status`;
@@ -99,9 +105,21 @@ export class Narrator {
           else if (r.result === "confirmed_from_projection") out.push(`${who(arm)} ${what}: receipt already in the log, marked done.`);
         }
         const stale = (d.stale ?? []) as string[];
-        if (stale.length) out.push(`${who(arm)} Marked ${stale.length} facts **stale**, because they were observed before the outage: ${stale.map((k) => k.replace(/^site-([A-Z])\.status$/, "Site $1 status")).join(", ")}.`);
+        if (stale.length) out.push(`${who(arm)} Marked ${stale.length} facts **stale**, because they were observed before the outage: ${stale.map(factName).join(", ")}.`);
         return out.join("\n\n");
       }
+      case "real_source": {
+        if (!d.ok) return `${who(arm)} 🌐 Couldn't read the real ${d.label} page (${d.error}); continuing without it.`;
+        const secs = (Number(d.nimble_ms) / 1000).toFixed(1);
+        if (d.mode === "first" || d.first) return `${who(arm)} 🌐 Real web via Nimble: **${d.label}** (${d.title}, ${secs} s): ${d.summary}.`;
+        return d.changed
+          ? `${who(arm)} 🌐 Re-checked the real **${d.label}** page after the outage: **changed**. Now: ${d.summary}. Before: ${d.before}.`
+          : `${who(arm)} 🌐 Re-checked the real **${d.label}** page after the outage: unchanged (${d.summary}).`;
+      }
+      case "real_gate":
+        return d.ok
+          ? `${who(arm)} 🌐 Checked the real ferry schedule before booking: ${d.reason}.`
+          : `${who(arm)} ⛔ Ferry not booked: ${d.reason}.`;
       case "observation": {
         if (arm !== "dr") return null; // the ordinary agent never re-reads after the crash; its first read adds nothing here
         const src = d.retrieval_mode === "direct" ? "a direct fetch (fallback, not Nimble)" : `Nimble (${d.parse_mode === "nimble" ? "parsed server-side" : "parsed locally from Nimble's HTML"}, ${(Number(d.nimble_ms) / 1000).toFixed(1)} s)`;
@@ -166,6 +184,8 @@ export type ArmResult = {
   verdict?: { verdict: string; reason: string; duplicate_effects: number; stale_actions: number } | null;
   ledger: LedgerOutcome[] | null;
   tokens: number[];
+  /** Real websites re-read after the restart (read-only; they rarely change on cue). */
+  realChecks?: { checked: number; changed: number; labels: string[] };
 };
 
 function campsiteCell(r: ArmResult): string {
@@ -192,6 +212,11 @@ export function scorecard(results: ArmResult[]): string {
     return v === "VALID" ? "✅ VALID" : v === "BLOCKED" ? "⛔ BLOCKED" : v === "INVALID" ? "❌ INVALID" : v;
   };
   const toks = (r: ArmResult) => (r.tokens.length ? r.tokens.join(" → ") : "–");
+  const real = (r: ArmResult) => {
+    const c = r.realChecks;
+    if (!c || !c.checked) return "none";
+    return `${c.checked} (${c.labels.join(", ")}): ${c.changed ? `**${c.changed} changed**` : "unchanged"}`;
+  };
   return [
     "### Scorecard",
     "",
@@ -201,6 +226,7 @@ export function scorecard(results: ArmResult[]): string {
     row("Ferry tickets paid (desk ledger)", ferries),
     row("Campsite", campsiteCell),
     row("Bookings made on stale info", stale),
+    row("Real websites re-checked after restart", real),
     row("Total charged", total),
     row("Planner context per step (tokens)", toks),
     "",

@@ -63,6 +63,8 @@ Two agents run the same mission side by side, with the same planner model, booki
 | Total charged | $280 | $310 |
 | Planner context per step (tokens) | 528 → 621 → 444 → 460 | 485 → 555 → 684 → 740 → 835 |
 
+**Real web, alongside the simulation.** Dead Reckoning also reads two real pages through Nimble: the operator's [Angel Island–Tiburon ferry schedule](https://angelislandferry.com/schedule) and the [Angel Island State Park](https://www.parks.ca.gov/?page_id=468) notices. Before booking the ferry it checks, in code, that the real schedule runs a ferry on the trip date (Friday Oct 9: departures 10 am, 11 am, 1 pm, 3 pm campers only), and blocks if it doesn't. After the crash it re-reads both pages and reports what changed while it was down, usually nothing, which is the honest answer. The campsite closure stays simulated so the dramatic moment happens on cue.
+
 The campsites: **Site A** is accessible but closes during the outage; **Site B** is open but *not* accessible (the trap for an agent that forgot the wheelchair); **Site C** is open and accessible (the correct repair).
 
 A second fixture, **F3b**, closes Site C as well. Dead Reckoning then ends **BLOCKED** with a precise reason (no open, accessible campsite left) instead of inventing a success, still with exactly one ferry ticket.
@@ -97,6 +99,7 @@ flowchart TB
     end
 
     rawtree[("RawTree by Tinybird<br/>append-only tables")]
+    realweb["Real web<br/>angelislandferry.com · parks.ca.gov"]
     ngrok["ngrok tunnel"]
 
     user --> openbot
@@ -112,6 +115,7 @@ flowchart TB
     loop --> sensor
     sensor -->|HTTPS| ngrok
     ngrok --> page
+    sensor -->|HTTPS, read-only| realweb
     loop -->|book / lookup by action_key| desk
 ```
 
@@ -152,6 +156,8 @@ sequenceDiagram
     D-->>R: already committed
     R->>C: receipt row, recovered = true (no second booking)
     Note over R: mark facts observed before the outage as stale
+    R->>N: re-read the real ferry schedule and park notices
+    N-->>R: unchanged since before the crash
     R->>N: extract status page
     N-->>R: Site A closed, B open (not accessible), C open
     R->>L: old "open" vs new "closed" for Site A
@@ -202,7 +208,7 @@ The Liquid curator proposes which items leave working memory; a code validator r
 | Sponsor | Role in Dead Reckoning | What to look for |
 |---|---|---|
 | **RawTree by Tinybird** | The agent's only durable memory. Eight append-only tables: `epochs`, `constraints`, `facts`, `commitments`, `receipts`, `plan_steps`, `context_ops`, `metrics`. Restore is a projection query; the closing numbers are live SQL. | "RESTORING FROM RAWTREE… 18 records" after the kill; `npm run demo:numbers` |
-| **Nimble** | The agent's eyes on the web. `POST /v2/extract` reads the park status page through the tunnel and parses 14 fields **server-side** with a schema parser. | "Read the park status page via Nimble (parsed server-side)" |
+| **Nimble** | The agent's eyes on the web. `POST /v2/extract` reads the simulated park status page through the tunnel (14 fields parsed **server-side** with a schema parser), and the **real** ferry schedule and park notices pages, re-checked after every restart. | "Real web via Nimble: angelislandferry.com…", "Re-checked the real parks.ca.gov page after the outage" |
 | **Liquid AI** | `LFM2.5-1.2B-Instruct` on llama.cpp, **on the laptop**, with JSON-schema constrained output. Two narrow jobs every step: compare an old fact with a new observation, and choose what to evict from working memory. | "Liquid curator: Site A open → closed", "Liquid trimmed working memory" |
 | **OpenAI** | GPT-5.5 via the Responses API with strict JSON schema, choosing among a bounded action set (`book`, `cancel`, `keep`, `block`) over candidates that code has already filtered. | "Planner chose Site C. Ruled out in code: Site A (closed), Site B (not wheelchair accessible)" |
 | **CopilotKit OpenBot** | The chat console. Dead Reckoning is registered as a remote AG-UI agent; OpenBot authenticates with a shared bearer token. CopilotKit Intelligence stores the threads. | Chat with the Dead Reckoning agent at `http://127.0.0.1:3010` |
@@ -268,6 +274,7 @@ npm run smoke:rawtree    # also smoke:nimble, smoke:liquid, smoke:planner
 | The crash: a real `kill -9` of a real process, restarted with a new pid | The booking desk: a local service with its own SQLite ledger; no real money |
 | RawTree as the only durable state; every row acknowledged before it counts | The park status page: a local page edited on cue to close Site A |
 | Nimble fetching and parsing that page over the internet | The "+48 h" clock jump (labeled `SIMULATED`) |
+| The real ferry schedule and park notices, read at start and re-checked after the crash; the ferry gate uses the real schedule | |
 | The Liquid model running locally, and GPT-5.5 choosing each booking | |
 | Token counts measured on the exact planner input | |
 

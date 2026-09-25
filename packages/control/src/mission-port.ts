@@ -37,7 +37,11 @@ export async function collectResults(actor: MissionActor, ops: DemoOps): Promise
   return Promise.all(missions.map(async (m) => {
     const p = actor.cache.get(m.run_id);
     const tokens = (p?.metrics ?? []).filter((x) => x.phase === "planner").map((x) => Number(x.context_tokens));
-    return { arm: m.arm, run_id: m.run_id, verdict: m.verdict ?? null, ledger: await ops.ledger(m.run_id, m.arm), tokens };
+    const rechecks = actor.recent(2000).filter((e) => e.type === "worker" && e.run_id === m.run_id)
+      .map((e) => e.data as { kind?: string; mode?: string; ok?: boolean; changed?: boolean; label?: string })
+      .filter((d) => d.kind === "real_source" && d.mode === "recheck" && d.ok);
+    const realChecks = { checked: rechecks.length, changed: rechecks.filter((d) => d.changed).length, labels: rechecks.map((d) => String(d.label)) };
+    return { arm: m.arm, run_id: m.run_id, verdict: m.verdict ?? null, ledger: await ops.ledger(m.run_id, m.arm), tokens, realChecks };
   }));
 }
 
@@ -80,6 +84,8 @@ const MISSION_HEADER = [
   `Two agents run the same mission side by side, with the same planner model, booking desk and crash point:`,
   `- ${ARMS.dr.dot} **${ARMS.dr.name}**: ${ARMS.dr.blurb}`,
   `- ${ARMS.naive.dot} **${ARMS.naive.name}**: ${ARMS.naive.blurb}`,
+  "",
+  "🌐 Real web: Dead Reckoning also reads the real Angel Island ferry schedule and park notices through Nimble. The booking desk and the campsite closure below are simulated.",
 ].join("\n");
 
 export function createMissionPort(actor: MissionActor, ops: DemoOps): AgUiMissionPort {

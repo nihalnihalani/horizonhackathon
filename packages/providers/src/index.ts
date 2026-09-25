@@ -3,6 +3,7 @@ export * from "./nimble.ts";
 export * from "./curator.ts";
 export * from "./planner.ts";
 export * from "./context.ts";
+export * from "./real-sources.ts";
 export { applyParserLocally, selectText } from "./html-select.ts";
 export { percentile, type FetchLike } from "./http.ts";
 

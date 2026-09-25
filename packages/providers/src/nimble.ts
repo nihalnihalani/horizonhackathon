@@ -234,13 +234,13 @@ export class NimbleSensor implements Sensor {
   }
 
   /** Plain extract of a public page (no parser) — live proof on the real source (e.g. parks.ca.gov). */
-  async extractPage(url: string): Promise<{ url: string; task_id: string; status: string; status_code: number; markdown_chars: number; raw_hash: string; metadata: unknown; nimble_ms: number }> {
+  async extractPage(url: string): Promise<{ url: string; task_id: string; status: string; status_code: number; markdown: string; markdown_chars: number; raw_hash: string; metadata: unknown; nimble_ms: number }> {
     const t0 = Date.now();
     const r = await postJson(this.f, "nimble-extract", `${this.base}/v2/extract`, { url, render: false, formats: ["markdown"] }, { headers: this.auth, timeoutMs: this.opts.timeoutMs ?? 60_000 });
     const j = r.json;
     if (r.status !== 200 || !j || j.status !== "success") throw new SourceUnverified(`nimble extract not successful (http ${r.status}, status ${j?.status ?? "?"})`);
     const md: string = j.data?.markdown ?? "";
-    return { url, task_id: String(j.task_id), status: String(j.status), status_code: Number(j.status_code ?? 0), markdown_chars: md.length, raw_hash: sha256(md), metadata: j.metadata ?? null, nimble_ms: Date.now() - t0 };
+    return { url, task_id: String(j.task_id), status: String(j.status), status_code: Number(j.status_code ?? 0), markdown: md, markdown_chars: md.length, raw_hash: sha256(md), metadata: j.metadata ?? null, nimble_ms: Date.now() - t0 };
   }
 }
 
