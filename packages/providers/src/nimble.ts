@@ -1,4 +1,4 @@
-// Nimble sensor: domain health + status-page extract.
+// Nimble sensor: status-page extract (POST /v2/extract).
 // Invariants: a non-success extract NEVER becomes "closed" — it throws SourceUnverified.
 // Parser shape (verified live 2026-09-25): /v2/extract's `parser` is ONE parser node, not a flat
 // {field: terminal} map, and its root input is the JSON object {url, html} — not a DOM. A flat map
@@ -8,14 +8,10 @@
 // path:"html"}, fields: NIMBLE_STATUS_PARSER}` — all 14 fields come back in data.parsing
 // (parse_mode:"nimble"). If Nimble's parsing is ever incomplete we still apply the same selectors
 // locally to the HTML *Nimble retrieved* (parse_mode:"local-css", retrieval_mode stays "live").
-// Domain health: POST /v1/domain-health/check {domains:[host]} is documented, but sdk.nimbleway.com
-// answers 404 with an empty body — byte-identical to an unknown path — for every variant tried, and
-// no published client (nimble-js 1.5.0, nimble_python 1.6.0, nimble CLI 1.5.0) ships the resource.
-// The route is not live for this key; health() reports "unavailable" and never throws.
 import { createHash } from "node:crypto";
 import {
   NIMBLE_STATUS_PARSER, NIMBLE_STATUS_FIELD_NAMES, SITE_IDS, SourceUnverified, encodeValue, parseStatusFields,
-  type BaseRow, type DomainHealth, type FactRow, type Observation, type Sensor, type SiteId, type StatusPageModel,
+  type BaseRow, type FactRow, type Observation, type Sensor, type SiteId, type StatusPageModel,
 } from "@dr/shared";
 import { applyParserLocally } from "./html-select.ts";
 import { postJson, snippet, type FetchLike } from "./http.ts";
@@ -44,8 +40,6 @@ export type NimbleObservation = Observation & {
   attempts: number;
   model: Omit<StatusPageModel, "park_name">;
 };
-export type HealthClass = "up" | "degraded" | "down" | "unknown" | "unavailable";
-export type NimbleDomainHealth = DomainHealth & { status: HealthClass; success_rate?: number; http_status?: number; health_ms: number };
 
 export type NimbleOptions = {
   apiKey: string;
@@ -102,20 +96,19 @@ export function factsFromObservation(obs: Observation): FactDraft[] {
   ]);
 }
 
-export type SourceClass = { kind: "unreachable" | "changed" | "unchanged" | "first"; changed_fields: string[]; health: HealthClass | null; reason: string };
-/** Classify a revalidation: site down / Nimble failure is "unreachable" (never "closed"); otherwise diff the fields. */
-export function classifySource(prev: Pick<Observation, "fields"> | null | undefined, result: { obs?: Pick<Observation, "fields">; error?: unknown; health?: Pick<DomainHealth, "status"> | null }): SourceClass {
-  const health = (result.health?.status as HealthClass | undefined) ?? null;
+export type SourceClass = { kind: "unreachable" | "changed" | "unchanged" | "first"; changed_fields: string[]; reason: string };
+/** Classify a revalidation: a failed fetch is "unreachable" (never "closed"); otherwise diff the fields. */
+export function classifySource(prev: Pick<Observation, "fields"> | null | undefined, result: { obs?: Pick<Observation, "fields">; error?: unknown }): SourceClass {
   if (!result.obs) {
     const why = result.error instanceof Error ? result.error.message : String(result.error ?? "no observation");
-    return { kind: "unreachable", changed_fields: [], health, reason: `${why}${health ? ` · domain health ${health}` : ""}` };
+    return { kind: "unreachable", changed_fields: [], reason: why };
   }
-  if (!prev) return { kind: "first", changed_fields: [], health, reason: "no prior observation" };
+  if (!prev) return { kind: "first", changed_fields: [], reason: "no prior observation" };
   const keys = NIMBLE_STATUS_FIELD_NAMES.filter((k) => k !== "updated_at" && k !== "world_version");
   const changed = keys.filter((k) => (prev.fields[k] ?? "") !== (result.obs!.fields[k] ?? ""));
   return changed.length
-    ? { kind: "changed", changed_fields: changed, health, reason: `changed: ${changed.join(", ")}` }
-    : { kind: "unchanged", changed_fields: [], health, reason: "fields identical" };
+    ? { kind: "changed", changed_fields: changed, reason: `changed: ${changed.join(", ")}` }
+    : { kind: "unchanged", changed_fields: [], reason: "fields identical" };
 }
 
 const withVersionParam = (url: string, v: number) => {
@@ -135,24 +128,6 @@ export class NimbleSensor implements Sensor {
     this.now = opts.now ?? (() => new Date());
   }
   private get auth() { return { Authorization: `Bearer ${this.opts.apiKey}` }; }
-
-  /** POST /v1/domain-health/check. Never throws: an unavailable health API is reported as status "unavailable". */
-  async health(host: string): Promise<NimbleDomainHealth> {
-    const h = hostOf(host);
-    const t0 = Date.now();
-    try {
-      const r = await postJson(this.f, "nimble-health", `${this.base}/v1/domain-health/check`, { domains: [h] }, { headers: this.auth, timeoutMs: 15_000 });
-      const entry = r.json?.domains?.[0];
-      if (r.status !== 200 || !entry) {
-        // 404 with an empty body = route not deployed for this key (see header), not a site verdict.
-        const reason = r.status === 404 ? "domain-health route not available (404)" : `domain-health http ${r.status}`;
-        return { host: h, status: "unavailable", http_status: r.status, raw: { http_status: r.status, reason }, health_ms: Date.now() - t0 };
-      }
-      return { host: h, status: entry.status as HealthClass, success_rate: entry.success_rate, http_status: 200, raw: entry, health_ms: Date.now() - t0 };
-    } catch (e) {
-      return { host: h, status: "unavailable", raw: { error: (e as Error).name }, health_ms: Date.now() - t0 };
-    }
-  }
 
   private async attempt(url: string, render: false | "auto") {
     const t0 = Date.now();

@@ -90,20 +90,11 @@ describe("NimbleSensor.extractStatusPage", () => {
   });
 });
 
-describe("health + classification", () => {
-  it("health parses the entry; 404 is 'unavailable' (never throws)", async () => {
-    const ok = fakeFetch([() => ({ json: { domains: [{ domain: "parks.ca.gov", status: "up", success_rate: 0.99, consecutive_bad_windows: 0, history: [] }] } })]);
-    const h = await new NimbleSensor({ apiKey: "k", fetchImpl: ok.f }).health("https://www.parks.ca.gov/?page_id=468");
-    expect(h).toMatchObject({ host: "parks.ca.gov", status: "up" });
-    expect(ok.calls[0]!.body).toEqual({ domains: ["parks.ca.gov"] });
-    const nf = fakeFetch([() => ({ status: 404, text: "" })]);
-    const u = await new NimbleSensor({ apiKey: "k", fetchImpl: nf.f }).health("x.com");
-    expect(u).toMatchObject({ status: "unavailable", http_status: 404, raw: { reason: "domain-health route not available (404)" } });
-  });
+describe("classification", () => {
   it("classifies unreachable vs changed vs unchanged", () => {
     const v2 = fx("nimble-status-parsed.json").data.parsing;
     const v1 = { ...v2, siteA_status: "open", siteA_notice: "", world_version: "1" };
-    expect(classifySource({ fields: v1 }, { error: new SourceUnverified("down"), health: { status: "down" } }).kind).toBe("unreachable");
+    expect(classifySource({ fields: v1 }, { error: new SourceUnverified("down") }).kind).toBe("unreachable");
     const c = classifySource({ fields: v1 }, { obs: { fields: v2 } });
     expect(c.kind).toBe("changed");
     expect(c.changed_fields).toEqual(["siteA_status", "siteA_notice"]);

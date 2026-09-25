@@ -71,14 +71,12 @@ function viewFromFacts(p: Projection): Record<string, SiteView> {
 }
 
 async function observe(): Promise<NimbleObservation> {
-  const host = new URL(statusUrl).host;
-  const health = await prov.sensor.health(host);
   const wv = await desk.worldVersion();
   const obs = await prov.sensor.extractStatusPage(statusUrl, { expectedWorldVersion: wv });
   const label = obs.retrieval_mode === "direct" ? "FALLBACK direct fetch (NOT Nimble)" : `Nimble extract task_id=${obs.task_id}`;
-  log(`OBSERVE ${label} · parse ${obs.parse_mode} · world v${obs.world_version} · ${obs.nimble_ms} ms · domain-health ${health.status}`);
+  log(`OBSERVE ${label} · parse ${obs.parse_mode} · world v${obs.world_version} · ${obs.nimble_ms} ms`);
   const sites = siteMap(obs.fields);
-  emit("observation", { task_id: obs.task_id, retrieval_mode: obs.retrieval_mode, parse_mode: obs.parse_mode, world_version: obs.world_version, nimble_ms: obs.nimble_ms, health: health.status, sites });
+  emit("observation", { task_id: obs.task_id, retrieval_mode: obs.retrieval_mode, parse_mode: obs.parse_mode, world_version: obs.world_version, nimble_ms: obs.nimble_ms, sites });
   return obs;
 }
 
