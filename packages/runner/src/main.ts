@@ -157,8 +157,8 @@ async function runDr() {
         await j.append("facts", nf);
         superseded.push(key);
         evidence.push(
-          { id: `fact:${key}@v${old.world_version ?? 0}`, text: `SUPERSEDED: ${key} = ${JSON.stringify(decodeValue(old.value))} observed ${old.observed_at} (world v${old.world_version ?? "?"}) replaced by ${JSON.stringify(newVal)}` },
-          { id: `obs:${old.nimble_request_id ?? `v${old.world_version ?? 0}`}`, text: `raw observation stub from before the outage (world v${old.world_version ?? "?"}) — site list as seen before the outage` },
+          { id: `fact:${key}@v${old.world_version ?? 0}`, text: `SUPERSEDED evidence, no longer true: ${key} was ${JSON.stringify(decodeValue(old.value))} at world v${old.world_version ?? "?"} (observed ${old.observed_at}); replaced by ${JSON.stringify(newVal)} (task ${obs.task_id})` },
+          { id: `obs:${old.nimble_request_id ?? `v${old.world_version ?? 0}`}`, text: `raw observation stub from before the outage (world v${old.world_version ?? "?"}); superseded by task ${obs.task_id}; no longer needed for the current step` },
         );
       } else if (r.decision === "unchanged") {
         await j.append("facts", nf); // revalidated: active with the new observed_at
