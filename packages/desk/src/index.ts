@@ -1,2 +1,4 @@
-// @dr/desk — owned by its work package (see docs/implementation/THREE_HOUR_CUT.md). Replace freely.
-export {};
+// @dr/desk — simulated booking desk (authoritative effect ledger) + status page feed.
+export * from "./args.ts";
+export * from "./store.ts";
+export * from "./app.ts";
