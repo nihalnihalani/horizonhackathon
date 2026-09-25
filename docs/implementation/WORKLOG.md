@@ -290,3 +290,14 @@ Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real R
 - Critic recheck of F1–F8 requested; pending at time of writing.
 - Critic recheck (dr-critic, read-only, at fe03812): **F1–F8 closed; no new P0/P1**. Reproducers rerun, and 49/49 tests pass across the six related files. Non-blocking notes: `pausing` is intentionally outside the stopped set; the RECONCILING refusal has no dedicated test; parity is asserted at phase boundaries only. The pending-append fix (1abfb63) came after the recheck and has not had an independent review; its own tests and the 10/11 live re-run cover it.
 - Left running on this machine: llama-server (LFM2.5-1.2B, 127.0.0.1:8080, started by dr-bench). dev-core stopped. Root `.env` still points DR_LIQUID_BASE_URL at 8081, so pass the 8080 override (or align the port) when running live here.
+
+### 15:35 PT — merge of origin/main into full-plan, live re-verification
+
+- f06838c merges main (Nimble json→html parser, the DR_INTERNAL_TOKEN bearer on /ag-ui, F3b, the OpenBot browser rehearsal). The /ag-ui bearer gate wraps the signed-run check and retry dedupe; F3b uses main's exact reason text from both the pre-planner and post-planner paths.
+- The first live run after the merge (f3-20260925-61f4) failed: a transient RawTree network error returned 503 to the runner, which exited. Fixed in 7d79edb: the runner retries the identical row up to 4 times with backoff, and control dedupes it by the pending event's id/hash. Refusals are never retried.
+- Live after the fix (real RawTree events, OpenAI, local Liquid; status page via the labelled direct fetch because this machine has no ngrok token):
+  - `demo-f3.sh` **10/11**: DR VALID $280, one ferry, receipt recovered, site-C.
+  - `demo:f3b` **12/13**: DR BLOCKED `no_accessible_site_available … accessible=true`, one ferry, no campsite attempted.
+  - The only failure in both is the Nimble-retrieval check.
+- Checks: `check:types` ok, `test:unit` 177/177, `test:recovery` 17/17, `check:lint` 0 problems, console server/app typecheck ok, OpenBot DR route tests 17/17. `tenant-package.test.ts` needs `TEST_DATABASE_URL`, which isn't configured here.
+- Independent Opus 5.5 verification (dr-verifier) is running at the time of writing.
