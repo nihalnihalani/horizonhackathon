@@ -323,3 +323,10 @@ Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real R
   - S11 and F02 (4118f76, 11 tests).
   - U01 and U02 (29 console app tests). The mission screen now enforces the revision guard at the fetch boundary.
   - Still not run: the browser against a live OpenBot, which needs an OpenBot database on the demo machine.
+
+### 15:58 PT — second merge of origin/main (1222de9), final live check
+
+- Merged main's narrated demo, desk-ledger `/scorecard` and Nimble domain-health removal. The narrator is attached per actor inside `createControlHandler`.
+- Checks: `check:types` ok, `check:lint` 0 problems, `test:unit` 198/198, `test:recovery` 17/17.
+- Live `demo-f3.sh` on the merged branch (f3-20260925-5b70): **10/11**. DR VALID $280, one ferry, receipt RECOVERED FROM DESK, Liquid superseded site-A, repaired to site-C. `/scorecard` serves desk-ledger results. The only failure is again the Nimble-retrieval check, because there is no ngrok token on this machine.
+- `full-plan` now contains all of `main`, so fast-forwarding `main` to it is conflict-free.
