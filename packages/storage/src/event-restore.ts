@@ -37,10 +37,25 @@ export function applyEvent(p: Projection, e: MissionEvent): Projection {
       };
       return p;
     }
-    case "MISSION_STATUS_CHANGED": {
+    case "MISSION_STATUS_CHANGED":
+    case "MISSION_PAUSED":
+    case "MISSION_CANCELLED":
+    case "MISSION_BLOCKED":
+    case "MISSION_VALIDATED": {
+      // Writer payload (control actor setStatus/setReconciliation): {from, to, reason, reconciliationStatus?}.
       const m = mission();
-      if (typeof payload.status === "string") m.status = payload.status as MissionStatus;
-      if (typeof payload.reconciliationStatus === "string") m.reconciliationStatus = payload.reconciliationStatus as ReconciliationStatus;
+      const fallback: Partial<Record<string, MissionStatus>> = { MISSION_PAUSED: "paused", MISSION_CANCELLED: "cancelled", MISSION_BLOCKED: "blocked", MISSION_VALIDATED: "valid" };
+      const to = (typeof payload.to === "string" ? payload.to : typeof payload.status === "string" ? payload.status : fallback[e.type]) as MissionStatus | undefined;
+      const reason = typeof payload.reason === "string" ? payload.reason : null;
+      if (typeof payload.reconciliationStatus === "string") {
+        m.reconciliationStatus = payload.reconciliationStatus as ReconciliationStatus;
+        if (m.reconciliationStatus === "blocked") m.blockedReason = reason;
+      } else if (to && to !== m.status) {
+        m.status = to;
+        if (to === "blocked") m.blockedReason = reason;
+        else if (to === "queued") m.blockedReason = null;
+        if (to === "restoring") m.armedCrash = null; // a crash point fires for exactly one generation (actor spawn)
+      }
       if ("blockedReason" in payload) m.blockedReason = (payload.blockedReason as string | null) ?? null;
       return p;
     }
@@ -60,26 +75,22 @@ export function applyEvent(p: Projection, e: MissionEvent): Projection {
       m.commands[commandId] = { commandId, kind, argsHash: String(payload.argsHash ?? ""), result: payload.result, revision: e.revision };
       if (kind === "arm_crash") {
         const args = payload.args as Record<string, unknown> | undefined;
-        const result = payload.result as Record<string, unknown> | undefined;
-        m.armedCrash = ((args?.point ?? result?.point) as CrashPoint | undefined) ?? null;
+        const result = payload.result as { point?: unknown; body?: { armedCrash?: unknown } } | undefined;
+        m.armedCrash = ((args?.point ?? result?.body?.armedCrash ?? result?.point) as CrashPoint | undefined) ?? null;
       }
       return p;
     }
-    case "MISSION_PAUSED": mission().status = "paused"; return p;
-    case "MISSION_CANCELLED": mission().status = "cancelled"; return p;
-    case "MISSION_BLOCKED": {
-      const m = mission();
-      m.status = "blocked";
-      m.blockedReason = typeof payload.reason === "string" ? payload.reason : null;
-      return p;
-    }
-    case "MISSION_VALIDATED": mission().status = "valid"; return p;
     default: {
       // Row-carrying event: payload = {table,row}; metrics are never canonical (events.ts eventTypeForRow).
       if (typeof payload.table === "string" && payload.table !== "metrics" && payload.row && typeof payload.row === "object") {
         const table = payload.table as Exclude<TableName, "metrics">;
         const row = parseStoredRow(table, payload.row as Record<string, unknown>);
         applyRow(p, table, row);
+        // A definitive commitment outcome resolves its dispatch claim (mirrors the actor's onCommitment).
+        const r = row as { action_key?: string; status?: string };
+        if (table === "commitments" && p.mission && r.action_key && ["confirmed", "rejected", "not_executed"].includes(String(r.status))) {
+          delete p.mission.claims[r.action_key];
+        }
       }
       return p;
     }

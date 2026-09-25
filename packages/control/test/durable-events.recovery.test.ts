@@ -95,6 +95,11 @@ describe("R02 on durable canonical events", () => {
     expect(desk.store.ledger({ run_id: id }).requests).toHaveLength(1);
     expect(fake.rows("mission_checkpoints", id).length).toBeGreaterThan(0);
     expect(r.checkpoint).not.toBeNull();
+    // Critic F1: the event-derived mission meta equals the live actor's meta (status, claims, armed crash).
+    const live = m().meta; const got = r.projection.mission!;
+    expect({ s: got.status, rs: got.reconciliationStatus, crash: got.armedCrash, claims: Object.keys(got.claims) })
+      .toEqual({ s: live.status, rs: live.reconciliationStatus, crash: live.armedCrash, claims: Object.keys(live.claims) });
+    expect(Object.keys(got.claims)).toEqual([]); // the ferry claim was resolved by its recovered outcome
   });
 });
 
