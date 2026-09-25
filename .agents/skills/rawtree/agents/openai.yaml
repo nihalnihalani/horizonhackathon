@@ -1,0 +1,4 @@
+interface:
+  display_name: "RawTree"
+  short_description: "Operate and query RawTree"
+  default_prompt: "Use $rawtree to ingest, query, or manage my RawTree data."
