@@ -62,7 +62,7 @@ export const SCOPES = {
     DR_RUN_ID: req,
     DR_EPOCH: z.coerce.number().int().min(1),
     DR_ARM: z.enum(["dr", "naive"]),
-    DR_CRASH_AFTER: z.enum(["", "after_desk_commit"]).default(""),
+    DR_CRASH_AFTER: z.enum(["", "after_intent", "after_claim", "after_desk_commit", "after_receipt", "desk_response_lost"]).default(""),
     DR_CONTROL_URL: url,
     DR_RUNNER_TOKEN: req,
   }),

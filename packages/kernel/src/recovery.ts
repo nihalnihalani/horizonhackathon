@@ -37,6 +37,11 @@ export type RecoveryDeps = {
   log?: (line: string) => void;
   /** test hook (I2b): called after the recovered receipts row is acked, before commitments confirmed */
   afterRecoveredReceipt?: (actionKey: string) => void | Promise<void>;
+  /**
+   * CONTRACTS §6: while pausing/cancelling, reconciliation is lookup-only — a 404 keeps the outcome unknown (no false
+   * not_executed, no resend). Defaults to true when projection.mission.status is pausing or cancelling.
+   */
+  lookupOnly?: boolean;
 };
 
 export async function recover(d: RecoveryDeps): Promise<RecoveryResult> {
@@ -49,6 +54,8 @@ export async function recover(d: RecoveryDeps): Promise<RecoveryResult> {
   const epoch = projection.epoch + 1;
   log(`${RESTORE_LINE_PREFIX}… ${restored} rows · epoch ${epoch}`);
   const journal = new Journal(d.sink, { run_id: d.run_id, arm: d.arm, epoch }, projection);
+  const ms = projection.mission?.status;
+  const lookupOnly = d.lookupOnly ?? (ms === "pausing" || ms === "cancelling");
 
   // Step 1: epoch row.
   await journal.append("epochs", {
@@ -80,8 +87,17 @@ export async function recover(d: RecoveryDeps): Promise<RecoveryResult> {
       await writeStep(journal, c, rc.committed ? "done" : "needs_repair", rc.committed ? `receipt ${rc.receipt_id} RECOVERED FROM DESK` : `rejected: ${rc.reject_reason}`);
       log(`reconcile ${c.slot} ${c.action_key.slice(0, 12)}… → ${rc.outcome} receipt ${rc.receipt_id} RECOVERED FROM DESK`);
       reconciled.push({ action_key: c.action_key, slot: c.slot, result: "recovered", receipt_id: rc.receipt_id, lookup: true });
+    } else if (r.status === "absent" && lookupOnly) {
+      await writeCommitment(journal, c, "unknown", null, "desk lookup 404 while pausing/cancelling; lookup-only, never resent");
+      const step = await writeStep(journal, c, "blocked", "reconcile_lookup_only_absent");
+      blocked.push(step);
+      log(`reconcile ${c.slot} ${c.action_key.slice(0, 12)}… → absent (lookup-only); outcome stays unknown, step ${step} blocked`);
+      reconciled.push({ action_key: c.action_key, slot: c.slot, result: "unknown", lookup: true });
     } else if (r.status === "absent") {
       await writeCommitment(journal, c, "not_executed", null, "desk lookup 404 (authoritative absence); retry with same key");
+      // an earlier lookup-only pass may have blocked the step; explicit Resume reopens it for the original key only
+      const open = Object.values(journal.state.plan_steps).find((s) => s.commitment_key === c.action_key);
+      if (open?.status === "blocked") await writeStep(journal, c, "needs_repair", "not executed; retry original key/args after explicit Resume");
       log(`reconcile ${c.slot} ${c.action_key.slice(0, 12)}… → not_executed`);
       reconciled.push({ action_key: c.action_key, slot: c.slot, result: "not_executed", lookup: true });
     } else {

@@ -72,7 +72,7 @@ export function createMissionPort(actor: MissionActor, ops: DemoOps): AgUiMissio
       }
       if (/resume|restart/.test(t)) {
         if (!ops.enabled) { yield "Demo controls are disabled."; return; }
-        const ms = actor.resume();
+        const ms = await actor.resume();
         if (!ms.length) { yield "Nothing to resume."; return; }
         yield `Resuming ${ms.map((m) => `\`${m.arm}\` (new pid ${m.pid})`).join(", ")} · sim_clock +48h SIMULATED`;
         yield* streamUntil(actor, () => ms.every((m) => m.state !== "running"), 240_000);
@@ -87,7 +87,7 @@ export function createMissionPort(actor: MissionActor, ops: DemoOps): AgUiMissio
         // Every take starts from the v1 world (Site A open) so the later "close site A" edit is a real change.
         const w = (await ops.reset()) as { world_version?: number };
         yield `Desk world reset to v${w?.world_version ?? 1} (Site A open).\n\n`;
-        const ms = actor.start(arms, { crash: !/no crash/.test(t), statusUrl: await ops.statusUrl() });
+        const ms = await actor.start(arms, { crash: !/no crash/.test(t), statusUrl: await ops.statusUrl() });
         yield `Mission started: ${ms.map((m) => `\`${m.arm}\` run ${m.run_id} pid ${m.pid}`).join(" · ")}. Angel Island Oct 9–11, party of 2, $400, wheelchair-accessible campsite required.`;
         yield* streamUntil(actor, () => ms.every((m) => m.state !== "running"), 180_000);
         yield "\n\nBoth runners are holding after the desk committed the ferry. Say **kill** to SIGKILL them.";

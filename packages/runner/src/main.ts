@@ -6,23 +6,29 @@
 import { parseArgs } from "node:util";
 import { resolve } from "node:path";
 import {
-  F3, REPO_ROOT, decodeValue, encodeValue, loadConfig, resourceById,
+  CrashPoint, F3, REPO_ROOT, decodeValue, loadConfig, resourceById,
   type FactRow, type Projection, type Slot,
 } from "@dr/shared";
-import { HttpDeskClient, Journal, NaiveTranscript, executeBooking, recover, type BookingStep, type Transcript } from "@dr/kernel";
+import {
+  DispatchRefused, HttpDeskClient, Journal, NaiveTranscript, OutcomeUnknown, executeBooking, recover, type BookingStep, type Transcript,
+} from "@dr/kernel";
 import {
   applyContextOps, compareOpRow, constraintsFromProjection, contextOpRows, createProviders, factsFromObservation,
   renderWorkingContext, siteMap, spentCents, type CandidateX, type EvidenceItem, type NimbleObservation, type PlannerContext,
 } from "@dr/providers";
 import { emptyProjection } from "@dr/storage";
-import { HttpProjectionLoader, HttpRowSink, emit, httpIntentGate } from "./io.ts";
+import { HttpProjectionLoader, HttpRowSink, emit, httpClaimDispatch, httpIntentGate } from "./io.ts";
 import { validateRun } from "./validator.ts";
+import { ensureInitialization, seedRun } from "./initialization.ts";
 
 const { values: argv } = parseArgs({
   options: { "status-url": { type: "string" }, "sim-clock": { type: "string" }, resume: { type: "string" }, transcript: { type: "string" } },
   strict: false,
 });
-const cfg = loadConfig("runner"); // never reads .env from disk
+// never reads .env from disk. DR_CRASH_AFTER is parsed here as any CrashPoint (the frozen runner scope only admits
+// after_desk_commit), so it is validated separately and blanked for loadConfig.
+const crashPoint = process.env.DR_CRASH_AFTER ? CrashPoint.parse(process.env.DR_CRASH_AFTER) : null;
+const cfg = loadConfig("runner", { ...process.env, DR_CRASH_AFTER: "" });
 const runId = cfg.DR_RUN_ID;
 const arm = cfg.DR_ARM;
 const link = { baseUrl: cfg.DR_CONTROL_URL.replace(/\/$/, ""), token: cfg.DR_RUNNER_TOKEN };
@@ -34,7 +40,7 @@ const desk = new HttpDeskClient({ baseUrl: cfg.DR_WORLD_BASE_URL, token: cfg.DR_
 const prov = createProviders({ ...process.env }, { directFallback: true });
 const statusUrl = String(argv["status-url"] ?? "http://127.0.0.1:4402/status.html");
 const simClock = String(argv["sim-clock"] ?? F3.sim_clock);
-const crash = cfg.DR_CRASH_AFTER === "after_desk_commit";
+const claimDispatch = httpClaimDispatch(link, cfg.DR_EPOCH);
 const log = (l: string) => console.log(l);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SITES = ["A", "B", "C"] as const;
@@ -98,12 +104,6 @@ async function blockStep(j: Journal, step_id: string, reason: string) {
   emit("step", { step_id, status: "blocked", reason });
 }
 
-async function seedRun(j: Journal) {
-  for (const c of F3.constraints) await j.append("constraints", { key: c.key, value: encodeValue(c.value), authority: "user", private: false, version: 1 });
-  for (const s of F3.plan) {
-    await j.append("plan_steps", { step_id: s.step_id, slot: s.slot, resource: s.resource, depends_on: s.depends_on, commitment_key: null, status: "pending", reason: "initial plan" });
-  }
-}
 
 async function terminal(j: Journal) {
   await sleep(1500); // RawTree visibility window (~0.6 s live)
@@ -118,15 +118,11 @@ async function terminal(j: Journal) {
 }
 
 // ---------------------------------------------------------------- DR arm
-async function runDr() {
+async function runDr(): Promise<"done" | "stopped"> {
   const rec = await recover({ loader, sink, desk, run_id: runId, arm, sim_clock: simClock, log });
   const j = rec.journal;
   emit("recovered", { epoch: rec.epoch, restored_rows: rec.restored_rows, reconciled: rec.reconciled, stale: rec.stale, blocked: rec.blocked_steps, pid: process.pid });
-  if (Object.keys(j.state.constraints).length === 0) {
-    await seedRun(j);
-    const obs = await observe();
-    for (const f of factsFromObservation(obs)) await j.append("facts", f);
-  }
+  await ensureInitialization(j, observe);
   let epochObs: NimbleObservation | null = null;
   let evicted: string[] = [];
 
@@ -186,7 +182,7 @@ async function runDr() {
     const m: StepMetrics = { curator_ms: 0, nimble_ms: 0 };
     let evidence: EvidenceItem[] = [];
     const deps = cur?.depends_on ?? ps.depends_on;
-    const staleDeps = deps.filter((k) => j.state.facts[k]?.status === "stale");
+    const staleDeps = deps.filter((k) => j.state.facts[k]?.status !== "active");
     if (staleDeps.length) {
       log(`STEP ${id}: depends on stale ${staleDeps.join(", ")} → revalidate before acting (invariant 3)`);
       const r = await revalidate(id, staleDeps, m);
@@ -231,7 +227,18 @@ async function runDr() {
     await j.append("metrics", { step: id, phase: "planner", context_tokens: d.context_tokens.count, planner_tokens_in: d.planner_tokens_in, curator_ms: m.curator_ms, nimble_ms: m.nimble_ms, duplicate_effects: 0, stale_actions: 0 });
     if (d.action !== "book" || !d.resource) { await blockStep(j, id, `planner ${d.action}: ${d.reason}`); continue; }
     const wv = await desk.worldVersion();
-    const out = await executeBooking({ journal: j, desk, log, awaitIntentVisible: httpIntentGate(link) }, stepFor(id, d.resource, wv), { holdAfterCommit: crash && id === F3.crash_step, holdMs: HOLD_MS });
+    let out;
+    try {
+      out = await executeBooking(
+        { journal: j, desk, log, awaitIntentVisible: httpIntentGate(link), claimDispatch }, stepFor(id, d.resource, wv),
+        { holdAfterCommit: crashPoint === "after_desk_commit" && id === F3.crash_step, point: id === F3.crash_step ? crashPoint : null, holdMs: HOLD_MS },
+      );
+    } catch (e) {
+      // pause/cancel won the claim race: stop dispatching; the parent finishes pause/cancel. No verdict is claimed.
+      if (e instanceof DispatchRefused) { emit("dispatch_refused", { step: id, code: e.refusal, reason: e.reason }); return "stopped"; }
+      if (e instanceof OutcomeUnknown) { await blockStep(j, id, `outcome_unknown: ${e.message}`); continue; }
+      throw e;
+    }
     log(`DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id} $${(out.receipt.amount / 100).toFixed(2)}`);
     emit("booking", { step: id, resource: d.resource, outcome: out.receipt.outcome, reject_reason: out.receipt.reject_reason ?? null, receipt_id: out.receipt.receipt_id, action_key: out.action_key, amount: out.receipt.amount });
     if (!out.receipt.committed) {
@@ -240,6 +247,7 @@ async function runDr() {
     }
   }
   await terminal(j);
+  return "done";
 }
 
 // ---------------------------------------------------------------- naive arm (transcript resume baseline)
@@ -281,7 +289,7 @@ async function runNaive() {
     t.lines.push(`user: next, the ${id}.`, `assistant: ${d.action} ${d.resource ?? ""} — ${d.reason}`);
     tr.save(t);
     if (d.action !== "book" || !d.resource) continue;
-    const out = await tr.book(j, desk, t, stepFor(id, d.resource, t.world_version), { holdAfterCommit: crash && id === F3.crash_step, holdMs: HOLD_MS }, log);
+    const out = await tr.book(j, desk, t, stepFor(id, d.resource, t.world_version), { holdAfterCommit: crashPoint === "after_desk_commit" && id === F3.crash_step, holdMs: HOLD_MS }, log);
     log(`NAIVE DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id}`);
     emit("booking", { step: id, resource: d.resource, outcome: out.receipt.outcome, reject_reason: out.receipt.reject_reason ?? null, receipt_id: out.receipt.receipt_id, action_key: out.action_key, amount: out.receipt.amount });
     t.lines.push(`tool: desk ${out.receipt.outcome} ${d.resource}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id}`);
@@ -295,10 +303,10 @@ async function runNaive() {
 }
 
 try {
-  log(`runner pid=${process.pid} run_id=${runId} arm=${arm} crash=${crash ? "after_desk_commit" : "none"} sim_clock=${simClock}`);
+  log(`runner pid=${process.pid} run_id=${runId} arm=${arm} crash=${crashPoint ?? "none"} sim_clock=${simClock}`);
   emit("started", { pid: process.pid, run_id: runId, arm });
   if (arm === "naive" || argv.resume === "transcript") await runNaive();
-  else await runDr();
+  else if ((await runDr()) === "stopped") log("runner stopped: dispatch refused by control (pause/cancel); no verdict");
   process.exit(0);
 } catch (e) {
   const err = e as Error & { code?: string };

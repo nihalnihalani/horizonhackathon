@@ -44,3 +44,17 @@ export function httpIntentGate(c: ControlLink) {
 export function emit(kind: string, data: Record<string, unknown> = {}): void {
   process.stdout.write(`@@DR ${JSON.stringify({ kind, ...data })}\n`);
 }
+
+/**
+ * CONTRACTS §6 dispatch claim: POST /internal/dispatch-claim {actionKey,argsHash,slot,epoch}. A refusal is a
+ * definitive "do not POST"; an unreachable control is also a refusal (fail closed: no claim, no desk request).
+ */
+export function httpClaimDispatch(c: ControlLink, epoch: number) {
+  return async (a: { actionKey: string; argsHash: string; slot: string }): Promise<{ granted: true; dispatchId: string } | { granted: false; code: string; reason: string }> => {
+    const res = await fetch(`${c.baseUrl}/internal/dispatch-claim`, { method: "POST", headers: h(c), body: JSON.stringify({ ...a, epoch }), signal: AbortSignal.timeout(20_000) }).catch(() => null);
+    if (!res) return { granted: false, code: "CONTROL_UNREACHABLE", reason: "control /internal/dispatch-claim unreachable" };
+    const j = (await res.json().catch(() => null)) as { granted?: boolean; dispatchId?: string; code?: string; message?: string } | null;
+    if (res.status === 200 && j?.granted && j.dispatchId) return { granted: true, dispatchId: j.dispatchId };
+    return { granted: false, code: j?.code ?? `HTTP_${res.status}`, reason: j?.message ?? "refused" };
+  };
+}

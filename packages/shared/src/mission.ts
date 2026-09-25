@@ -63,7 +63,7 @@ export const TRANSITIONS: Record<MissionStatus, readonly MissionStatus[]> = {
   executing: ["planning", "curating", "valid", "blocked", "pausing", "cancelling", "failed"],
   curating: ["planning", "executing", "blocked", "pausing", "cancelling", "failed"],
   waiting_approval: ["executing", "planning", "blocked", "pausing", "cancelling"],
-  pausing: ["paused", "cancelling", "blocked"],
+  pausing: ["paused", "cancelling", "blocked", "queued"],
   paused: ["queued", "cancelling"],
   cancelling: ["cancelled"],
   cancelled: [],
@@ -73,8 +73,13 @@ export const TRANSITIONS: Record<MissionStatus, readonly MissionStatus[]> = {
   failed: [],
 };
 
-export function canTransition(from: MissionStatus, to: MissionStatus): boolean {
-  return from === to || TRANSITIONS[from].includes(to);
+/** Nonterminal statuses a mission can be left in when its owned child exits (CONTRACTS §3 Resume rule). */
+export const ACTIVE_STATUSES: readonly MissionStatus[] = ["queued", "restoring", "reconciling", "revalidating", "planning", "executing", "curating", "waiting_approval"];
+
+/** `childExited`: the owned child is confirmed exited, so Resume may re-queue an otherwise active status. */
+export function canTransition(from: MissionStatus, to: MissionStatus, o: { childExited?: boolean } = {}): boolean {
+  if (from === to || TRANSITIONS[from].includes(to)) return true;
+  return to === "queued" && !!o.childExited && ACTIVE_STATUSES.includes(from);
 }
 
 /** Error envelope (CONTRACTS §5). */
