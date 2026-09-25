@@ -43,11 +43,14 @@ footer { color:var(--mute); font-size:11px; padding:0 16px 16px; }
   <span class="sub">Angel Island · Oct 9–11 · party 2 · $400 · wheelchair-accessible campsite · live SSE from control <span id="conn">…</span></span>
   <input id="tok" type="password" placeholder="operator token" autocomplete="off">
   <button onclick="op('reset')">Reset world</button>
-  <button onclick="op('start',{arm:'both',crash:true})">Start both</button>
-  <button class="danger" onclick="op('kill')">kill -9 held</button>
+  <button onclick="op('start',{arm:'both',crash:true})">Start controlled test</button>
+  <button class="danger" onclick="op('kill')">Crash held workers</button>
+  <button onclick="op('start',{arm:'both',crash:false})">Start free run</button>
+  <button class="danger" onclick="op('kill',{all:true})">Crash now (all live workers)</button>
   <button onclick="op('world',{site:'site-A',status:'closed',notice:'Storm damage'})">Close Site A</button>
   <button onclick="op('resume')">Resume</button>
 </header>
+<p id="operation" role="status" aria-live="polite" style="padding:0 16px">Controlled test waits at the booking boundary. Free run has no deliberate hold: press Crash now at any time, then Resume. Control and desk remain alive.</p>
 <main>
   <section id="dr"></section>
   <section id="naive"></section>
@@ -108,8 +111,20 @@ function render() {
 async function op(path, body) {
   const t = document.getElementById("tok").value.trim();
   try { localStorage.setItem("dr-op", t); } catch {}
-  const r = await fetch(`/demo/${path}`, { method: "POST", headers: { authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify(body || {}) });
-  if (!r.ok) alert(`${path}: HTTP ${r.status}`);
+  const status = document.getElementById("operation");
+  try {
+    const r = await fetch(`/demo/${path}`, { method: "POST", headers: { authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const result = await r.json();
+    if (path === "kill") {
+      status.textContent = result.killed.length
+        ? result.killed.map((w) => `${w.arm} · pid ${w.pid} · ${w.signal || "exited without SIGKILL"} · ${w.alive_after ? "still alive — check worker" : "process gone"}`).join("; ")
+        : `No ${body?.all ? "live" : "held"} workers to crash. A free run may have already finished.`;
+    } else {
+      status.textContent = path === "start" ? (body?.crash === false ? "Free run started. Crash now kills live workers immediately, without waiting for a boundary." : "Controlled test started. Workers will hold after the ferry desk commits.") : `${path}: accepted`;
+    }
+  } catch (e) { status.textContent = `${path}: ${e.message}`; }
+
 }
 try { document.getElementById("tok").value = localStorage.getItem("dr-op") || ""; } catch {}
 const es = new EventSource("/events");
