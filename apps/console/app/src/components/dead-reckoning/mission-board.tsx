@@ -1,6 +1,7 @@
 import { type ReactNode, useState } from "react";
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from "@/components/ui/item";
 import { Separator } from "@/components/ui/separator";
+import { allBookableStepsConfirmed } from "@/lib/dead-reckoning/mission-rules";
 import type { MissionSnapshot } from "@/lib/dead-reckoning/types";
 import { ConstraintStrip } from "./constraint-strip";
 import { EvidenceDrawer } from "./evidence-drawer";
@@ -18,13 +19,7 @@ export function MissionBoard({ mission }: { mission: MissionSnapshot }) {
   const openFact = mission.facts.find((f) => f.key === openFactKey) ?? null;
 
   const reconciliation = reconciliationLabel(mission.reconciliationStatus);
-  const bookableSteps = mission.plan.filter((s) => s.resource !== null);
-  const allConfirmed =
-    bookableSteps.length > 0 &&
-    bookableSteps.every((s) => {
-      const commitment = mission.commitments.find((c) => c.slot === s.slot);
-      return commitment?.status === "confirmed";
-    });
+  const allConfirmed = allBookableStepsConfirmed(mission.plan, mission.commitments);
 
   return (
     <div className="space-y-6">

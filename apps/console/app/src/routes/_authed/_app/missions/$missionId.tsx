@@ -1,6 +1,5 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef } from "react";
 import { MissionBoard } from "@/components/dead-reckoning/mission-board";
 import { OperatorStatus } from "@/components/dead-reckoning/operator-status";
 import { ProofPanel } from "@/components/dead-reckoning/proof-panel";
@@ -8,53 +7,23 @@ import { ReceiptRail } from "@/components/dead-reckoning/receipt-rail";
 import { WorkingContextTray } from "@/components/dead-reckoning/working-context-tray";
 import { PageSection, PageShell } from "@/components/layout/page-shell";
 import { SidebarToggleBar } from "@/components/layout/sidebar-toggle";
-import { missionKeys, missionQueryOptions } from "@/lib/dead-reckoning/queries";
-import { isTerminalStatus } from "@/lib/dead-reckoning/types";
+import { missionRefetchIntervalMs } from "@/lib/dead-reckoning/mission-rules";
+import { missionQueryOptions } from "@/lib/dead-reckoning/queries";
+import { useMissionEvents } from "@/lib/dead-reckoning/use-mission-events";
+import { queryClient } from "@/query-client";
 
 export const Route = createFileRoute("/_authed/_app/missions/$missionId")({
   component: MissionDetailScreen,
 });
 
-/**
- * The canonical refresh loop (P5.5/U01/U02): poll while nonterminal, refetch after every command
- * (mutations invalidate this query key), and let SSE only *nudge* a refetch — the event payload
- * itself is never rendered as state, so an out-of-order or missing hint cannot regress the view.
- * A reload always starts from a plain GET, so a worker-death reload shows the current canonical
- * revision rather than a historical success message held in memory.
- */
-function useMissionEvents(missionId: string) {
-  const queryClient = useQueryClient();
-  const sourceRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    let source: EventSource;
-    try {
-      source = new EventSource(`/api/dead-reckoning/missions/${encodeURIComponent(missionId)}/events`);
-    } catch {
-      return;
-    }
-    sourceRef.current = source;
-    const nudge = () => queryClient.invalidateQueries({ queryKey: missionKeys.detail(missionId) });
-    source.addEventListener("message", nudge);
-    source.addEventListener("error", () => {
-      // A dropped SSE connection is not durable truth going missing — polling still carries the
-      // view. Nothing to show the operator beyond what OperatorStatus/MissionBoard already render.
-    });
-    return () => {
-      source.close();
-      sourceRef.current = null;
-    };
-  }, [missionId, queryClient]);
-}
-
 function MissionDetailScreen() {
   const { missionId } = Route.useParams();
+  // A reload always starts from a plain GET against a query the router just created (no
+  // `initialData`), so a worker-death reload shows the current canonical revision/status rather
+  // than a historical success message held in memory (U01).
   const mission = useQuery({
-    ...missionQueryOptions(missionId),
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      return data && isTerminalStatus(data.status) ? false : 1_500;
-    },
+    ...missionQueryOptions(missionId, queryClient),
+    refetchInterval: (query) => missionRefetchIntervalMs(query.state.data?.status),
   });
   useMissionEvents(missionId);
 

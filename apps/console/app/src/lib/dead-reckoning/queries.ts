@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
 import type { MissionListItem, MissionSnapshot } from "./types";
 
@@ -39,17 +39,38 @@ export function missionListQueryOptions() {
 }
 
 /**
+ * Never let a fetch resolving out of order regress the displayed mission (U02): an SSE hint only
+ * ever triggers a plain refetch, never carries state of its own, and a reconnect racing a slow
+ * poll can land either response first. `undefined` current (first load, or a cleared cache after
+ * a reload) always accepts the incoming snapshot — there is nothing yet to protect.
+ */
+export function pickNewerMissionSnapshot(
+  current: MissionSnapshot | undefined,
+  incoming: MissionSnapshot,
+): MissionSnapshot {
+  if (!current) return incoming;
+  return incoming.revision < current.revision ? current : incoming;
+}
+
+/**
  * The mission board's canonical read. Polling cadence (1.5s while nonterminal, per P5.5/U01) is
  * the route component's job, not this factory's — it depends on the currently displayed status.
+ *
+ * `queryClient` is required (not optional) so the revision guard above is always wired in, rather
+ * than being something a call site can forget: every fetched snapshot is merged against whatever
+ * is already cached under this mission's key through {@link pickNewerMissionSnapshot} before it is
+ * allowed to become the query's data.
  */
-export function missionQueryOptions(missionId: string) {
+export function missionQueryOptions(missionId: string, queryClient: QueryClient) {
   return queryOptions({
     queryKey: missionKeys.detail(missionId),
     queryFn: async (): Promise<MissionSnapshot> => {
       const response = await client(missionApiPath(missionId), {
         fallback: "Could not load this mission",
       });
-      return (await response.json()) as MissionSnapshot;
+      const incoming = (await response.json()) as MissionSnapshot;
+      const current = queryClient.getQueryData<MissionSnapshot>(missionKeys.detail(missionId));
+      return pickNewerMissionSnapshot(current, incoming);
     },
   });
 }
