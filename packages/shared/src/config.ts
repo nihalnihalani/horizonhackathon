@@ -79,7 +79,7 @@ export const RUNNER_ENV_ALLOWLIST = [
   "DR_RUN_ID", "DR_EPOCH", "DR_ARM", "DR_CRASH_AFTER", "DR_CONTROL_URL", "DR_RUNNER_TOKEN",
 ] as const;
 /** Non-secret process plumbing the supervisor may also pass. */
-export const RUNNER_ENV_PASSTHROUGH = ["PATH", "HOME", "TMPDIR", "NODE_OPTIONS", "TZ"] as const;
+export const RUNNER_ENV_PASSTHROUGH = ["PATH", "HOME", "TMPDIR", "NODE_OPTIONS", "TZ", "DR_HOLD_MS"] as const;
 
 let dotenvLoaded = false;
 export function loadDotenv(path = resolve(REPO_ROOT, ".env")): void {

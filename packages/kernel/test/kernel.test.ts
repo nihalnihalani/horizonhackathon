@@ -161,9 +161,26 @@ describe("recovery 1–4", () => {
     expect(d3.lookups).toBe(0);
     expect(r3.reconciled).toMatchObject([{ action_key: key, result: "confirmed_from_projection", lookup: false }]);
     expect(r3.journal.state.commitments[key]!.status).toBe("confirmed");
+    expect(r3.journal.state.plan_steps.ferry!.status).toBe("done");
     const ids = new Set(fake.rows("receipts", run).map((x) => x.receipt_id));
     expect(ids.size).toBe(1);
     expect(desk.store.ledger({ run_id: run }).requests).toHaveLength(1);
+  });
+
+  it("kill after confirmed commitment but before plan_steps=done → restore closes the step (no invariant-2 crash loop)", async () => {
+    const run = "f3-20260925-win1";
+    const { journal } = mk(run);
+    const s = f3FerryStep();
+    const key = actionKey(run, s.step_id, s.resource, s.date, s.party);
+    const c = { action_key: key, kind: "book" as const, slot: s.slot, resource: s.resource, date: s.date, party: s.party, args_hash: "h", receipt_id: null, reversible: false, compensates: null };
+    await journal.append("commitments", { ...c, status: "intent", reason: "step ferry" });
+    await journal.append("plan_steps", { step_id: "ferry", slot: s.slot, resource: s.resource, depends_on: [], commitment_key: key, status: "active", reason: "intent acked" });
+    await journal.append("receipts", { action_key: key, receipt_id: "rcpt-win1", slot: s.slot, resource: s.resource, outcome: "committed", reject_reason: null, service_ts: "2026-09-25T20:00:00Z", amount: 12000, recovered: false });
+    await journal.append("commitments", { ...c, status: "confirmed", receipt_id: "rcpt-win1", reason: "desk committed" });
+    const { sink, loader, desk: d2 } = mk(run);
+    const r = await recover({ loader, sink, desk: d2, run_id: run, arm: "dr", log: quiet });
+    expect(d2.lookups).toBe(0);
+    expect(r.journal.state.plan_steps.ferry!.status).toBe("done");
   });
 
   it("naive transcript arm: no reconcile, attempt-derived key → second ferry at the desk", async () => {

@@ -128,6 +128,9 @@ async function route(req: IncomingMessage, res: ServerResponse) {
       const arms: Arm[] = a === "both" ? ["dr", "naive"] : [a as Arm];
       const statusUrl = typeof b.status_url === "string" ? b.status_url : await resolveStatusUrl();
       try {
+        const blocker = actor.startBlocker(arms);
+        if (blocker) throw new Error(blocker);
+        if (b.reset !== false) await ops.reset();
         const ms = actor.start(arms, { crash: b.crash !== false, statusUrl });
         return json(res, 200, { started: ms.map((x) => ({ arm: x.arm, run_id: x.run_id, pid: x.pid })), status_url: statusUrl });
       } catch (e) { return json(res, 409, { error: (e as Error).message }); }

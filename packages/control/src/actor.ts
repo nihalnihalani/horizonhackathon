@@ -117,11 +117,20 @@ export class MissionActor {
   }
 
   // ---------------------------------------------------------------- supervisor
-  start(arms: Arm[], opts: { crash: boolean; statusUrl: string }): Mission[] {
-    const out: Mission[] = [];
+  /** Error message if any arm still has a live child (start would throw), else null. */
+  startBlocker(arms: Arm[]): string | null {
     for (const arm of arms) {
       const prev = this.missions[arm];
-      if (prev?.child && prev.state !== "killed" && prev.state !== "done" && prev.state !== "failed") throw new Error(`${arm} mission ${prev.run_id} still has a live child pid ${prev.pid}`);
+      if (prev?.child && prev.state !== "killed" && prev.state !== "done" && prev.state !== "failed") return `${arm} mission ${prev.run_id} still has a live child pid ${prev.pid}`;
+    }
+    return null;
+  }
+
+  start(arms: Arm[], opts: { crash: boolean; statusUrl: string }): Mission[] {
+    const out: Mission[] = [];
+    const blocker = this.startBlocker(arms);
+    if (blocker) throw new Error(blocker);
+    for (const arm of arms) {
       const run_id = newRunId();
       mkdirSync(resolve(REPO_ROOT, "artifacts/naive"), { recursive: true });
       const m: Mission = {

@@ -73,7 +73,9 @@ if (runs.dr) {
   const cmp = await client.query(`SELECT * FROM context_ops WHERE run_id = '${runs.dr}' AND op = 'compare' AND key = 'site-A.status'`);
   for (const c of cmp) say(`  Liquid compare ${c.key}: decision ${c.decision}${c.promoted_by ? ` (promoted_by ${c.promoted_by})` : ""} accepted ${c.accepted} curator_ms ${c.curator_ms}`);
   const obs = await client.query(`SELECT * FROM facts WHERE run_id = '${runs.dr}' AND key = 'site-A.status' AND status = 'active'`);
-  for (const o of obs) say(`  site-A.status observation: Nimble task ${o.nimble_request_id} · world v${o.world_version}`);
+  const viaNimble = (o: Record<string, unknown>) => !!o.nimble_request_id && !String(o.nimble_request_id).startsWith("direct-");
+  for (const o of obs) say(`  site-A.status observation: ${viaNimble(o) ? "Nimble task" : "FALLBACK direct fetch (NOT Nimble)"} ${o.nimble_request_id} · world v${o.world_version}`);
+  check("[dr] both site-A observations retrieved via Nimble (not direct fallback)", obs.length >= 2 && obs.every(viaNimble), obs.map((o) => String(o.nimble_request_id)).join(","));
   const camp = Object.values(p.receipts).filter((r) => r.slot === "campsite" && r.outcome === "committed");
   check("[dr] campsite repaired to site-C (accessible), not B (inaccessible) or A (closed)", camp.length === 1 && camp[0]!.resource === "site-C", camp.map((r) => r.resource).join(","));
   const steps = Object.values(p.plan_steps).map((s) => `${s.step_id}:${s.status}`).join(" ");
@@ -86,7 +88,8 @@ if (runs.naive) {
   const ferries = l.outcomes.filter((o) => o.slot === "ferry" && o.committed);
   const closed = l.outcomes.filter((o) => o.reject_reason === "closed");
   say(`[naive] desk ledger: ${ferries.length} committed ferries (${ferries.map((f) => f.receipt_id).join(", ")}) · ${closed.length} booking(s) rejected as closed (${closed.map((c) => c.resource).join(",")})`);
-  check("[naive] transcript-resume baseline double-booked the ferry and tried closed Site A → INVALID", n.verdict?.verdict === "INVALID" && ferries.length === 2 && closed.length >= 1, `duplicate_effects ${n.verdict?.duplicate_effects} · stale_actions ${n.verdict?.stale_actions}`);
+  // Append-only transcript ablation (VALIDATION §6): recorded, never a pass/fail gate, so DR's result never depends on it failing.
+  say(`[naive] ablation outcome recorded: verdict ${n.verdict?.verdict ?? "none"} — ${n.verdict?.reason ?? ""} · ${ferries.length} committed ferries · tried closed site ${closed.length}x (desk rejected) · duplicate_effects ${n.verdict?.duplicate_effects} · stale_actions ${n.verdict?.stale_actions}`);
   say(`  shared code validator rules: ${VALIDATOR_RULES.join(" | ")}`);
 }
 

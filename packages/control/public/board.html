@@ -99,7 +99,7 @@ function render() {
       <table><tr><th>slot</th><th>resource</th><th>outcome</th><th>receipt</th></tr>
       ${rc.map((r) => `<tr><td>${esc(r.slot)}</td><td>${esc(r.resource)}</td><td class="${r.outcome === "rejected" ? "rej" : ""}">${esc(r.outcome)}${r.reject_reason ? ` (${esc(r.reject_reason)})` : ""}</td><td>${esc(r.receipt_id)} ${r.recovered === true || r.recovered === "true" ? '<span class="tag">RECOVERED FROM DESK</span>' : ""}</td></tr>`).join("") || '<tr><td colspan="4" class="meta">no receipts yet</td></tr>'}
       </table>
-      ${f ? `<div class="fact">site-A.status = <b>${esc(JSON.parse(f.value))}</b> <span class="meta">(${esc(f.status)}${f.nimble_request_id ? ` · task ${esc(f.nimble_request_id)}` : ""}${f.world_version ? ` · world v${esc(f.world_version)}` : ""})</span></div>` : ""}
+      ${f ? `<div class="fact">site-A.status = <b>${esc(JSON.parse(f.value))}</b> <span class="meta">(${esc(f.status)}${f.nimble_request_id ? (String(f.nimble_request_id).startsWith("direct-") ? ` · <b>FALLBACK direct fetch (NOT Nimble)</b> ${esc(f.nimble_request_id)}` : ` · Nimble task ${esc(f.nimble_request_id)}`) : ""}${f.world_version ? ` · world v${esc(f.world_version)}` : ""})</span></div>` : ""}
       <div class="bars">${a.tokens.map((t) => `<div class="bar"><span class="meta">${esc(t.label)}</span><div class="track"><div class="fill" style="width:${(100 * t.n) / max}%;background:${cfg.color}"></div></div><span>${t.n}</span></div>`).join("")}</div>
       <div class="log">${a.logs.slice(-30).map(esc).join("\n")}</div>`;
     const lg = el.querySelector(".log"); if (lg) lg.scrollTop = lg.scrollHeight;

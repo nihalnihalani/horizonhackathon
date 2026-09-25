@@ -50,4 +50,11 @@ describe("terminal validator (shared by both arms)", () => {
     expect(v.verdict).toBe("BLOCKED");
     expect(v.reason).toContain("curator_unavailable");
   });
+  it("BLOCKED (not VALID): desk lookup unavailable means effects are unknown, never inferred as absent", async () => {
+    const p = proj([commit("k1", "ferry", "ferry-tiburon-1009"), commit("k2", "campsite", "site-C"), commit("k3", "permit", "permit"), commit("k4", "gear", "gear")], allDone);
+    const down: DeskClient = { book: async () => { throw new Error("no"); }, lookup: async (): Promise<LookupResult> => ({ status: "unavailable", reason: "timeout" }) as LookupResult };
+    const v = await validateRun(p, down);
+    expect(v.verdict).toBe("BLOCKED");
+    expect(v.reason).toContain("desk unavailable for 4");
+  });
 });

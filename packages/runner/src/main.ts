@@ -38,6 +38,9 @@ const crash = cfg.DR_CRASH_AFTER === "after_desk_commit";
 const log = (l: string) => console.log(l);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const SITES = ["A", "B", "C"] as const;
+// HOLD after the desk commit waits for the presenter's kill. 10 min default so narration/questions cannot expire it
+// (the story is lost if the hold expires); override with DR_HOLD_MS (non-secret passthrough).
+const HOLD_MS = Number(process.env.DR_HOLD_MS) > 0 ? Number(process.env.DR_HOLD_MS) : 600_000;
 type StepMetrics = { curator_ms: number; nimble_ms: number };
 
 function stepFor(step_id: string, resource: string, wv: number): BookingStep {
@@ -228,7 +231,7 @@ async function runDr() {
     await j.append("metrics", { step: id, phase: "planner", context_tokens: d.context_tokens.count, planner_tokens_in: d.planner_tokens_in, curator_ms: m.curator_ms, nimble_ms: m.nimble_ms, duplicate_effects: 0, stale_actions: 0 });
     if (d.action !== "book" || !d.resource) { await blockStep(j, id, `planner ${d.action}: ${d.reason}`); continue; }
     const wv = await desk.worldVersion();
-    const out = await executeBooking({ journal: j, desk, log, awaitIntentVisible: httpIntentGate(link) }, stepFor(id, d.resource, wv), { holdAfterCommit: crash && id === F3.crash_step, holdMs: 120_000 });
+    const out = await executeBooking({ journal: j, desk, log, awaitIntentVisible: httpIntentGate(link) }, stepFor(id, d.resource, wv), { holdAfterCommit: crash && id === F3.crash_step, holdMs: HOLD_MS });
     log(`DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id} $${(out.receipt.amount / 100).toFixed(2)}`);
     emit("booking", { step: id, resource: d.resource, outcome: out.receipt.outcome, reject_reason: out.receipt.reject_reason ?? null, receipt_id: out.receipt.receipt_id, action_key: out.action_key, amount: out.receipt.amount });
     if (!out.receipt.committed) {
@@ -278,7 +281,7 @@ async function runNaive() {
     t.lines.push(`user: next, the ${id}.`, `assistant: ${d.action} ${d.resource ?? ""} — ${d.reason}`);
     tr.save(t);
     if (d.action !== "book" || !d.resource) continue;
-    const out = await tr.book(j, desk, t, stepFor(id, d.resource, t.world_version), { holdAfterCommit: crash && id === F3.crash_step, holdMs: 120_000 }, log);
+    const out = await tr.book(j, desk, t, stepFor(id, d.resource, t.world_version), { holdAfterCommit: crash && id === F3.crash_step, holdMs: HOLD_MS }, log);
     log(`NAIVE DESK ${id} ${d.resource}: ${out.receipt.outcome}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id}`);
     emit("booking", { step: id, resource: d.resource, outcome: out.receipt.outcome, reject_reason: out.receipt.reject_reason ?? null, receipt_id: out.receipt.receipt_id, action_key: out.action_key, amount: out.receipt.amount });
     t.lines.push(`tool: desk ${out.receipt.outcome} ${d.resource}${out.receipt.reject_reason ? ` (${out.receipt.reject_reason})` : ""} receipt ${out.receipt.receipt_id}`);

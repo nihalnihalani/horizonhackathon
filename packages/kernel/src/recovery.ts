@@ -64,6 +64,7 @@ export async function recover(d: RecoveryDeps): Promise<RecoveryResult> {
     if (inProjection) {
       // I2b: receipt already recorded (killed before the confirmed row) → no lookup, write only the commitment.
       await writeCommitment(journal, c, inProjection.outcome === "committed" ? "confirmed" : "rejected", inProjection.receipt_id, "reconciled from recorded receipt");
+      await writeStep(journal, c, inProjection.outcome === "committed" ? "done" : "needs_repair", inProjection.outcome === "committed" ? `receipt ${inProjection.receipt_id} reconciled from recorded receipt` : `rejected: ${inProjection.reject_reason ?? "?"}`);
       reconciled.push({ action_key: c.action_key, slot: c.slot, result: "confirmed_from_projection", receipt_id: inProjection.receipt_id, lookup: false });
       continue;
     }
@@ -90,6 +91,17 @@ export async function recover(d: RecoveryDeps): Promise<RecoveryResult> {
       log(`reconcile ${c.slot} ${c.action_key.slice(0, 12)}… → unknown; step ${step} blocked`);
       reconciled.push({ action_key: c.action_key, slot: c.slot, result: "unknown", lookup: true });
     }
+  }
+
+  // Step 3b: a kill between the confirmed commitment row and the plan_steps=done row leaves the step open with a
+  // success receipt; re-running it would trip invariant 2. Close any such step from the recorded commitment.
+  for (const c of Object.values(journal.state.commitments)) {
+    if (c.kind !== "book" || c.status !== "confirmed") continue;
+    // Only the step still 'active' on exactly this key; a needs_repair step (commitment_key reset) is left to repair.
+    const s = Object.values(journal.state.plan_steps).find((x) => x.commitment_key === c.action_key);
+    if (!s || s.status !== "active") continue;
+    await writeStep(journal, c, "done", `confirmed commitment ${c.receipt_id ?? c.action_key.slice(0, 12)}; step closed on restore`);
+    log(`reconcile ${c.slot} step closed on restore (commitment already confirmed)`);
   }
 
   // Step 4: mark stale.
