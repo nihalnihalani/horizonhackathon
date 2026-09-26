@@ -9,6 +9,10 @@
     "node": ">=20"
   },
   "scripts": {
+    "demo:product": "node scripts/demo-product.mjs",
+    "test:product": "vitest run packages/control/test/preparations.test.ts packages/control/test/product-server.test.ts packages/providers/test/reservation.test.ts",
+    "demo:local": "node scripts/demo-local.mjs",
+    "test:demo:local": "vitest run packages/control/test/local-demo.recovery.test.ts packages/control/test/local-store.test.ts packages/providers/test/local.test.ts",
     "check:types": "node packages/shared/bin/check-types.mjs",
     "test:unit": "vitest run --exclude '**/*.recovery.test.ts'",
     "test:recovery": "vitest run .recovery.test.ts",

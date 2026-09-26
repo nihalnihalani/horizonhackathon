@@ -74,6 +74,7 @@ export type ConfigOf<S extends Scope> = z.infer<(typeof SCOPES)[S]>;
 
 /** Exactly these env keys reach the runner child (plus PATH/HOME/NODE_* set by the supervisor). */
 export const RUNNER_ENV_ALLOWLIST = [
+  "DR_DEMO_MODE",
   "NIMBLE_API_KEY", "OPENAI_API_KEY", "DR_PLANNER_MODEL", "DR_LIQUID_BASE_URL", "DR_LIQUID_MODEL",
   "DR_WORLD_BASE_URL", "DR_WORLD_TOKEN", "DR_PLANNER_CONTEXT_BUDGET",
   "DR_RUN_ID", "DR_EPOCH", "DR_ARM", "DR_CRASH_AFTER", "DR_CONTROL_URL", "DR_RUNNER_TOKEN",
@@ -89,6 +90,16 @@ export function loadDotenv(path = resolve(REPO_ROOT, ".env")): void {
 }
 
 export function loadConfig<S extends Scope>(scope: S, env: NodeJS.ProcessEnv = process.env): ConfigOf<S> {
+  // Explicit rehearsal mode never reads .env and cannot inherit provider credentials.
+  if (env.DR_DEMO_MODE === "local" && (scope === "runner" || scope === "control")) {
+    const schema = SCOPES[scope].extend({
+      NIMBLE_API_KEY: z.literal(""), OPENAI_API_KEY: z.literal(""),
+      ...(scope === "control" ? { RAWTREE_API_KEY: z.literal("") } : {}),
+    });
+    const res = schema.safeParse({ ...env, NIMBLE_API_KEY: "", OPENAI_API_KEY: "", RAWTREE_API_KEY: "" });
+    if (!res.success) throw new ConfigError(scope, [...new Set(res.error.issues.map((i) => String(i.path[0])))]);
+    return res.data as ConfigOf<S>;
+  }
   if (scope !== "runner" && env === process.env) loadDotenv();
   const res = SCOPES[scope].safeParse(env);
   if (!res.success) throw new ConfigError(scope, [...new Set(res.error.issues.map((i) => String(i.path[0])))]);
@@ -105,5 +116,12 @@ export function buildRunnerEnv(
   for (const k of RUNNER_ENV_PASSTHROUGH) if (base[k]) out[k] = base[k]!;
   const merged: Record<string, unknown> = { ...cfg, ...gen, DR_CRASH_AFTER: gen.DR_CRASH_AFTER ?? "" };
   for (const k of RUNNER_ENV_ALLOWLIST) if (merged[k] !== undefined) out[k] = String(merged[k]);
+  if (base.DR_DEMO_MODE === "local") {
+    out.DR_DEMO_MODE = "local";
+    delete out.NIMBLE_API_KEY;
+    delete out.OPENAI_API_KEY;
+    // Do not inherit arbitrary Node preload hooks into a key-free rehearsal child.
+    delete out.NODE_OPTIONS;
+  }
   return out;
 }

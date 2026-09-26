@@ -6,6 +6,8 @@
 #                         Liquid llama-server · Postgres (pgvector) · public status-feed tunnel · desk · control ·
 #                         OpenBot console; --phone also starts the allowlisted phone gateway + its tunnel
 #   ./run.sh status       what is up, on which address, and the URLs to open
+#   ./run.sh product      real ferry form preparation (existing Nimble service key)
+#   ./run.sh local        key-free simulated recovery rehearsal
 #   ./run.sh demo [f3b]   run the scripted live demo (fixture F3, or F3b: no accessible campsite)
 #   ./run.sh test         type checks, lint, unit, recovery and bench tests (no live services needed)
 #   ./run.sh doctor       readiness check (env presence, services, sockets) — never prints secret values
@@ -17,6 +19,9 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 ROOT=$(pwd)
+# Key-free rehearsal must branch before any .env read or hosted-service setup.
+if [ "${1:-}" = "local" ]; then exec node scripts/demo-local.mjs; fi
+if [ "${1:-}" = "product" ]; then exec node scripts/demo-product.mjs; fi
 LOGS="$ROOT/artifacts/logs"; RUN="$ROOT/artifacts/run"; mkdir -p "$LOGS" "$RUN"
 # Append (never prepend) tool paths so the project's own Node stays first (native modules are built for it).
 export PATH="$PATH:$HOME/.bun/bin:/opt/homebrew/bin:/opt/homebrew/opt/postgresql@17/bin"

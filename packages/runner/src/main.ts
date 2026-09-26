@@ -17,6 +17,7 @@ import {
   renderWorkingContext, siteMap, spentCents, type CandidateX, type EvidenceItem, type NimbleObservation, type PlannerContext,
   REAL_SOURCES, realFingerprint, summarizeReal, type RealFacts,
 } from "@dr/providers";
+import { createLocalProviders } from "@dr/providers/local";
 import { emptyProjection } from "@dr/storage";
 import { HttpProjectionLoader, HttpRowSink, emit, exitAfterFlush, httpClaimDispatch, httpIntentGate } from "./io.ts";
 import { noCandidateReason, validateRun } from "./validator.ts";
@@ -36,9 +37,13 @@ const sink = new HttpRowSink(link);
 const loader = new HttpProjectionLoader(link);
 const verdictLoader = new HttpProjectionLoader(link, "verdict");
 const desk = new HttpDeskClient({ baseUrl: cfg.DR_WORLD_BASE_URL, token: cfg.DR_WORLD_TOKEN, ns: { run_id: runId, arm } });
-// Pass a copy of the env so the providers scope never falls back to reading .env from disk.
-const prov = createProviders({ ...process.env }, { directFallback: true });
 const statusUrl = String(argv["status-url"] ?? "http://127.0.0.1:4402/status.html");
+const localMode = process.env.DR_DEMO_MODE === "local";
+// Local mode constructs no hosted adapters. The live scope receives an env copy, never a disk .env fallback.
+const prov = localMode
+  ? createLocalProviders(statusUrl, cfg.DR_PLANNER_CONTEXT_BUDGET)
+  : createProviders({ ...process.env }, { directFallback: true });
+const curatorLabel = localMode ? "LOCAL rule" : "LIQUID";
 const simClock = String(argv["sim-clock"] ?? F3.sim_clock);
 const claimDispatch = httpClaimDispatch(link, cfg.DR_EPOCH);
 const log = (l: string) => console.log(l);
@@ -73,10 +78,10 @@ function viewFromFacts(p: Projection): Record<string, SiteView> {
 async function observe(): Promise<NimbleObservation> {
   const wv = await desk.worldVersion();
   const obs = await prov.sensor.extractStatusPage(statusUrl, { expectedWorldVersion: wv });
-  const label = obs.retrieval_mode === "direct" ? "FALLBACK direct fetch (NOT Nimble)" : `Nimble extract task_id=${obs.task_id}`;
-  log(`OBSERVE ${label} · parse ${obs.parse_mode} · world v${obs.world_version} · ${obs.nimble_ms} ms`);
+  const label = localMode ? `LOCAL status feed observation=${obs.task_id}` : obs.retrieval_mode === "direct" ? "FALLBACK direct fetch (NOT Nimble)" : `Nimble extract task_id=${obs.task_id}`;
+  log(`OBSERVE ${label} · parse ${obs.parse_mode} · world v${obs.world_version}${localMode ? "" : ` · ${obs.nimble_ms} ms`}`);
   const sites = siteMap(obs.fields);
-  emit("observation", { task_id: obs.task_id, retrieval_mode: obs.retrieval_mode, parse_mode: obs.parse_mode, world_version: obs.world_version, nimble_ms: obs.nimble_ms, sites });
+  emit("observation", { task_id: obs.task_id, retrieval_mode: obs.retrieval_mode, parse_mode: obs.parse_mode, world_version: obs.world_version, nimble_ms: obs.nimble_ms, sites, provider_mode: localMode ? "local" : "live" });
   return obs;
 }
 
@@ -98,7 +103,7 @@ async function blockStep(j: Journal, step_id: string, reason: string) {
 
 
 async function terminal(j: Journal) {
-  await sleep(1500); // RawTree visibility window (~0.6 s live)
+  if (!localMode) await sleep(1500); // RawTree visibility window (~0.6 s live)
   const p = await verdictLoader.load(runId);
   // this epoch's acked rows are authoritative even if RawTree has not surfaced them yet
   for (const t of ["commitments", "receipts", "plan_steps", "facts"] as const) Object.assign(p[t], j.state[t]);
@@ -114,6 +119,10 @@ async function terminal(j: Journal) {
 // as volatile facts so recovery marks them stale and the next epoch re-checks them. A fetch failure never
 // blocks the run: the real sites are context, the simulated desk remains the authority on bookings.
 async function readRealWorld(j: Journal, mode: "first" | "recheck") {
+  if (localMode) {
+    log("LOCAL demo: public web reads disabled; only the simulated desk status feed is refreshed");
+    return;
+  }
   const results = await Promise.all(REAL_SOURCES.map(async (src) => {
     try {
       const page = await prov.sensor.extractPage(src.url);
@@ -156,7 +165,8 @@ function realFerryGate(j: Journal): { ok: boolean; reason: string } {
 
 // ---------------------------------------------------------------- DR arm
 async function runDr(): Promise<"done" | "stopped"> {
-  const rec = await recover({ loader, sink, desk, run_id: runId, arm, sim_clock: simClock, log });
+  const recoveryLog = localMode ? (line: string) => log(line.replace("RESTORING FROM RAWTREE", "RESTORING FROM LOCAL JOURNAL")) : log;
+  const rec = await recover({ loader, sink, desk, run_id: runId, arm, sim_clock: simClock, log: recoveryLog });
   const j = rec.journal;
   emit("recovered", { epoch: rec.epoch, restored_rows: rec.restored_rows, reconciled: rec.reconciled, stale: rec.stale, blocked: rec.blocked_steps, pid: process.pid });
   const init = await ensureInitialization(j, observe);
@@ -189,13 +199,13 @@ async function runDr(): Promise<"done" | "stopped"> {
         return { ok: false, reason: `curator_unavailable: ${(e as Error).message}` };
       }
       m.curator_ms += r.curator_ms;
-      await j.append("context_ops", compareOpRow(step_id, r));
+      await j.append("context_ops", { ...compareOpRow(step_id, r), ...(localMode ? { proposed_by: "rule" as const } : {}) });
       await j.append("metrics", { step: step_id, phase: "curator", context_tokens: 0, planner_tokens_in: 0, curator_ms: r.curator_ms, nimble_ms: 0, duplicate_effects: 0, stale_actions: 0 });
-      log(`LIQUID curator ${key}: ${JSON.stringify(decodeValue(old.value))} (observed ${old.observed_at}, world v${old.world_version ?? "?"}) vs ${JSON.stringify(newVal)} (world v${obs.world_version} task ${obs.task_id}) → decision ${r.decision}${r.promoted_by ? " (promoted_by validator)" : ""} · model ${r.model_decision ?? "?"} · accepted ${r.accepted} · curator_ms ${r.curator_ms}`);
-      emit("curator", { key, old: decodeValue(old.value), new: newVal, decision: r.decision, model_decision: r.model_decision ?? null, promoted_by: r.promoted_by ?? null, accepted: r.accepted, curator_ms: r.curator_ms, task_id: obs.task_id });
+      log(`${curatorLabel} curator ${key}: ${JSON.stringify(decodeValue(old.value))} (observed ${old.observed_at}, world v${old.world_version ?? "?"}) vs ${JSON.stringify(newVal)} (world v${obs.world_version} task ${obs.task_id}) → decision ${r.decision}${r.promoted_by ? " (promoted_by validator)" : ""}${localMode ? "" : ` · model ${r.model_decision ?? "?"}`} · accepted ${r.accepted} · curator_ms ${r.curator_ms}`);
+      emit("curator", { key, old: decodeValue(old.value), new: newVal, decision: r.decision, model_decision: r.model_decision ?? null, promoted_by: r.promoted_by ?? null, accepted: r.accepted, curator_ms: r.curator_ms, task_id: obs.task_id, proposed_by: localMode ? "rule" : "liquid" });
       if (!r.accepted) return { ok: false, reason: `curator_rejected: ${r.reject_reason ?? "?"}` };
       if (r.decision === "superseded") {
-        await j.append("facts", { ...factBody(old), status: "superseded", superseded_by: obs.task_id, excerpt: `superseded by ${JSON.stringify(newVal)} (Liquid ${r.decision}${r.promoted_by ? ", promoted by validator" : ""}; task ${obs.task_id})` });
+        await j.append("facts", { ...factBody(old), status: "superseded", superseded_by: obs.task_id, excerpt: `superseded by ${JSON.stringify(newVal)} (${localMode ? "local rule" : "Liquid"} ${r.decision}${r.promoted_by ? ", promoted by validator" : ""}; task ${obs.task_id})` });
         await j.append("facts", nf);
         superseded.push(key);
         evidence.push(
@@ -246,11 +256,11 @@ async function runDr(): Promise<"done" | "stopped"> {
         for (const row of contextOpRows(id, prop, applied)) await j.append("context_ops", row);
         evicted = applied.evicted;
         evidence = evidence.filter((e) => !evicted.includes(e.id));
-        log(`LIQUID context_ops (${prop.proposed_by}): evict [${applied.accepted.join(", ") || "none"}]${applied.rejected.length ? ` rejected [${applied.rejected.map((x) => `${x.id}: ${x.reason}`).join("; ")}]` : ""} · items ${applied.before.length}→${applied.after.length} · tokens ${rendered.tokens.count}→${applied.rendered.tokens.count}`);
+        log(`${curatorLabel} context_ops (${prop.proposed_by}): evict [${applied.accepted.join(", ") || "none"}]${applied.rejected.length ? ` rejected [${applied.rejected.map((x) => `${x.id}: ${x.reason}`).join("; ")}]` : ""} · items ${applied.before.length}→${applied.after.length} · tokens ${rendered.tokens.count}→${applied.rendered.tokens.count}`);
         emit("context_ops", { step: id, proposed_by: prop.proposed_by, accepted: applied.accepted, rejected: applied.rejected, items_before: applied.before.length, items_after: applied.after.length, tokens_before: rendered.tokens.count, tokens_after: applied.rendered.tokens.count });
       }
     }
-    if (ps.slot === "ferry") {
+    if (ps.slot === "ferry" && !localMode) {
       const g = realFerryGate(j);
       log(`REAL ferry gate: ${g.ok ? "ok" : "BLOCK"} · ${g.reason}`);
       emit("real_gate", { step: id, ok: g.ok, reason: g.reason });
@@ -317,7 +327,7 @@ async function runNaive() {
   const epoch = t.attempt;
   let naiveSourceDown: string | null = null;
   const j = new Journal(sink, { run_id: runId, arm: "naive", epoch });
-  log(`NAIVE transcript resume: attempt ${t.attempt}, ${t.lines.length - 1} transcript lines reloaded from local file; no RawTree restore, no reconcile, no revalidation`);
+  log(`NAIVE transcript resume: attempt ${t.attempt}, ${t.lines.length - 1} transcript lines reloaded from local file; no ${localMode ? "canonical journal" : "RawTree"} restore, no reconcile, no revalidation`);
   emit("recovered", { epoch, restored_rows: 0, transcript_lines: t.lines.length, pid: process.pid, naive: true });
   await j.append("epochs", { reason: epoch === 1 ? "boot" : "resume", restored_rows: 0, sim_clock: simClock, pid: process.pid, verdict: null, verdict_reason: null });
   if (epoch === 1) {
@@ -389,6 +399,7 @@ async function runNaive() {
 
 try {
   log(`runner pid=${process.pid} run_id=${runId} arm=${arm} crash=${crashPoint ?? "none"} sim_clock=${simClock}`);
+  if (localMode) log("LOCAL DEMO: rule planner and curator; local journal and simulated desk; zero hosted provider calls");
   emit("started", { pid: process.pid, run_id: runId, arm });
   if (arm === "naive" || argv.resume === "transcript") await runNaive();
   else if ((await runDr()) === "stopped") log("runner stopped: dispatch refused by control (pause/cancel); no verdict");

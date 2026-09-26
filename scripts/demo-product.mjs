@@ -1,0 +1,10 @@
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const env = {};
+for (const name of ["PATH", "HOME", "TMPDIR", "TZ", "NIMBLE_API_KEY"]) if (process.env[name]) env[name] = process.env[name];
+const child = spawn(process.execPath, ["--import", "tsx", "packages/control/src/product-server.ts"], { cwd: root, env, stdio: "inherit" });
+for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => child.kill(signal));
+child.once("exit", (code) => process.exit(code ?? 1));
+child.once("error", () => { console.error("The product could not start. Install repository dependencies and try again."); process.exit(1); });
