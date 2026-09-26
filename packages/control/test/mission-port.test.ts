@@ -12,7 +12,8 @@ async function start(missions: Mission[], text = "plan my Angel Island trip") {
   const unsubscribe = vi.fn();
   const actor = {
     startBlocker: () => null,
-    start: vi.fn(async () => missions),
+    reserveStart: () => ({ release: () => undefined }),
+    startReserved: vi.fn(async () => missions),
     subscribe: () => unsubscribe,
   } as unknown as MissionActor;
   const ops = {
@@ -38,7 +39,7 @@ describe("chat start reports observed execution", () => {
 
   it("uses the actual single worker instead of claiming both agents paused", async () => {
     const { completion, actor } = await start([mission("dr", "holding", { holdLine: HOLD_LINE_PREFIX })], "plan my trip dr only");
-    expect(actor.start).toHaveBeenCalledWith(["dr"], expect.anything());
+    expect(actor.startReserved).toHaveBeenCalledWith(["dr"], expect.anything());
     expect(completion).toContain("Dead Reckoning");
     expect(completion).toContain("has committed");
     expect(completion).not.toContain("Both agents");
