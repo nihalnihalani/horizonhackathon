@@ -1,6 +1,28 @@
+<div align="center">
+
 # Dead Reckoning
 
 **A long-horizon trip agent that survives `kill -9` after a payment has already gone through, and still finishes the job correctly.**
+
+[![Long Horizon Agents Hack](https://img.shields.io/badge/Long%20Horizon%20Agents%20Hack-2026-7c3aed?style=for-the-badge)](#hackathon-fit)
+[![Live demo verified](https://img.shields.io/badge/live%20demo-VALID%20%24280-16a34a?style=for-the-badge)](#measured-results)
+
+[![RawTree by Tinybird](https://img.shields.io/badge/RawTree-Tinybird-25D366?style=flat-square)](https://www.tinybird.co/)
+[![Nimble](https://img.shields.io/badge/Nimble-web%20extract-0ea5e9?style=flat-square)](https://www.nimbleway.com/)
+[![Liquid AI](https://img.shields.io/badge/Liquid%20AI-LFM2.5--1.2B%20local-f97316?style=flat-square)](https://www.liquid.ai/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-Responses%20API-111827?style=flat-square&logo=openai)](https://platform.openai.com/docs/api-reference/responses)
+[![CopilotKit](https://img.shields.io/badge/CopilotKit-OpenBot%20%C2%B7%20AG--UI-6366f1?style=flat-square)](https://www.copilotkit.ai/)
+
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)
+![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?style=flat-square&logo=node.js&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-console-000000?style=flat-square&logo=bun)
+![Tests](https://img.shields.io/badge/tests-232%20unit%20%C2%B7%2019%20real--SIGKILL%20recovery%20%C2%B7%2046%20console%20%C2%B7%2027%20bench-16a34a?style=flat-square)
+
+<img src="docs/assets/05-proof-board.jpg" alt="Proof board: Dead Reckoning VALID with the ferry receipt recovered from the desk, the transcript agent BLOCKED" width="900">
+
+</div>
+
+## Hackathon fit
 
 Built at the **Long Horizon Agents Hack** (tokens&, AWS Builder Loft, San Francisco, 25 Sep 2026). Long-running agents fail because history piles up: stale observations, repeated actions, ever-growing prompts. Dead Reckoning addresses this with the hackathon's three ideas:
 
@@ -77,15 +99,30 @@ flowchart LR
 | **OpenAI** | The Responses API planner: one structured decision per step, `store:false`, input bounded to 6,000 tokens and built from state, never from a transcript. | `packages/providers/src/planner.ts` |
 | **CopilotKit** | The OpenBot console (AG-UI remote agent, Intelligence threads). It verifies the signed run identity and hosts the mission screen. | `apps/console` |
 
-## Measured results (live runs, this repo)
+## Screenshots
+
+| 1 · Plan, then paused at the crash point | 2 · A real `kill -9` |
+|---|---|
+| ![Both agents paid for the ferry and paused before recording it; Nimble read the real ferry schedule and park notices](docs/assets/01-plan-crash-point.jpg) | ![Both runner processes SIGKILLed; still alive: no](docs/assets/02-kill.jpg) |
+| **3 · Resume: restore, reconcile, revalidate** | **4 · Scorecard from the desk ledger** |
+| ![No local state, rebuilt from RawTree, same receipt recovered, Liquid supersedes Site A, re-plans only the campsite](docs/assets/03-resume-recovery.jpg) | ![Dead Reckoning VALID $280 on Site C; transcript agent BLOCKED after trying closed Site A](docs/assets/04-scorecard.jpg) |
+
+<details><summary>Mission screen (OpenBot route <code>/missions/$missionId</code>)</summary>
+
+![Durable mission state: constraints, simulated receipts, revision and worker PID](docs/assets/06-mission-screen.jpg)
+
+</details>
+
+## Measured results
 
 | Evidence | Result |
 |---|---|
 | Crash after desk commit → resume (F3) | Same receipt recovered from the desk; **1 ferry** in the ledger; Site A superseded by Liquid; repaired to Site C; **VALID $280** |
+| F1–F6 mission batch ([results](docs/results/missions-20260925-e71c3c/summary.md)) | Dead Reckoning matched the oracle on **6/6** fixtures: normal; kill after intent, after desk commit plus closure, and after receipt; unreachable source (BLOCKED `source_unverified`); no accessible site (BLOCKED). The transcript ablation failed F3 as designed. |
 | No accessible site left (F3b) | **BLOCKED `no_accessible_site_available`**; no campsite booked, because a correct refusal beats a wrong success |
-| Planner input per step | DR **532 → 617 → 437 → 452** tokens (bounded) vs transcript baseline **485 → … → 784** (grows every step) |
+| Planner input per step | DR **528 → 619 → 440 → 457** tokens (bounded) vs transcript baseline **485 → 551 → 637 → 687 → 773** (grows every step) |
 | 12-round memory trace (M1, live Liquid + OpenAI) | A Liquid-authored eviction changed the next prompt, and pins and recall survived; DR peak 3,966 vs `checkpoint-summary-v1` 5,533 tokens ([results](docs/results/m1-paired-20260925-947564/summary.md)) |
-| Tests | 205 unit, 17 real-SIGKILL recovery, 27 bench, 46 console; the acceptance matrix is in [VALIDATION_AND_DEMO.md](docs/implementation/VALIDATION_AND_DEMO.md) |
+| Tests | 232 unit, 19 real-SIGKILL recovery, 27 bench, 46 console (`./run.sh test`); the acceptance matrix is in [VALIDATION_AND_DEMO.md](docs/implementation/VALIDATION_AND_DEMO.md) |
 
 These are single runs, not statistics. The baseline keeps the same desk idempotency and safety checks: it is a fair transcript-resume ablation, not a straw man.
 
@@ -123,3 +160,7 @@ docs/implementation   plan, contracts, validation, worklog
 ```
 
 Third-party code: OpenBot and OpenMuse (MIT). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Team
+
+Built by **Nihal Nihalani** and **Charlie Gillet**, with a Claude Code agent team (Opus, Sonnet and Fable) for implementation and review. The engineering log is in [WORKLOG.md](docs/implementation/WORKLOG.md).
