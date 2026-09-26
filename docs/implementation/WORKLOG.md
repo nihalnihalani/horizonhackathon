@@ -4,6 +4,10 @@ This file begins as a truthful planning handoff. Update it during implementation
 
 ## Current state
 
+### Active Codex task — product demo, 26 September 2026
+
+User clarified existing app service keys are allowed; no coding-assistant API key. Current request is to prepare a real reservation on the booking website for the user to submit, rather than present a fixed mock. The earlier key-free rehearsal is implemented and tested separately. See [current scope, ownership, evidence and limits](PRODUCT_DEMO_2026-09-26.md). Root and three Codex teammates performed the recorded work; no Claude/Fable invocation or completed Fable gate is claimed. Do not confuse local simulated desk effects with real travel bookings. Current independent public-site discovery has reached the official FareHarbor ticket selector; no real reservation/cart/payment was submitted.
+
 - [x] OpenBot/OpenMuse source review and pinned reference clones.
 - [x] Architecture adoption plan and three independent reviews.
 - [x] API/configuration inventory and official-source checks from the preceding research turn.
@@ -344,3 +348,14 @@ Open at time of writing: a live `demo-f3.sh` run on full-plan failed. One real R
   - Planner tokens: DR 532→617→437→452 vs naive 485→552→638→697→784.
   - The rehearsal ran from a clean worktree at 43a4740.
   - The browser tab closed during resume; the outcome was read from control and /scorecard.
+
+### 17:30 PT — public repo and submission README
+
+- Before going public, every branch's history was scanned: the current secret values from both `.env` files were not found, and there are no env, database or weight files.
+- `main` was fast-forwarded to `full-plan` and the repo was made public.
+- README: badges, a Mermaid architecture diagram, sponsor roles, and a screenshot gallery from a live OpenBot run (`docs/assets/`). Rendering verified on github.com: 17 images, none broken, Mermaid rendered.
+- **Fixed during the live screenshot run:**
+  - (a) CopilotKit's thread-title generator re-ran the agent with the user's text, so `plan` executed twice. It now gets a JSON title and never reaches the mission port.
+  - (b) A race in the legacy start. A start reservation is taken before the world reset.
+  - (c) The runner's projection read retries on 503.
+- F1–F6 batch `missions-20260925-e71c3c`: Dead Reckoning 6/6. Checks: unit 232/232, recovery 19/19.
