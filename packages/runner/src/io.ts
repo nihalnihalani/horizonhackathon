@@ -45,11 +45,19 @@ export class HttpRowSink implements RowSink {
 
 export class HttpProjectionLoader implements ProjectionLoader {
   constructor(private c: ControlLink, private purpose: "restore" | "verdict" = "restore") {}
+  /** Read-only, so a transient 503 (RawTree momentarily unavailable) is retried a bounded number of times. */
   async load(runId: string): Promise<Projection> {
-    const res = await fetch(`${this.c.baseUrl}/internal/projection?run_id=${encodeURIComponent(runId)}&purpose=${this.purpose}`, { headers: h(this.c), signal: AbortSignal.timeout(60_000) });
-    if (res.status !== 200) throw new AckError(`control /internal/projection HTTP ${res.status}`);
-    const j = (await res.json()) as { projection: Projection };
-    return j.projection;
+    const attempts = 4;
+    for (let i = 1; ; i++) {
+      let res: Response | null = null;
+      try {
+        res = await fetch(`${this.c.baseUrl}/internal/projection?run_id=${encodeURIComponent(runId)}&purpose=${this.purpose}`, { headers: h(this.c), signal: AbortSignal.timeout(60_000) });
+      } catch { res = null; }
+      if (res?.status === 200) return ((await res.json()) as { projection: Projection }).projection;
+      if ((res && res.status !== 503) || i >= attempts) throw new AckError(`control /internal/projection ${res ? `HTTP ${res.status}` : "unreachable"}`);
+      console.log(`projection unavailable (attempt ${i}/${attempts}); retrying`);
+      await new Promise((r) => setTimeout(r, 1500 * i));
+    }
   }
 }
 

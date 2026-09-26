@@ -1,0 +1,166 @@
+{
+  "batch_id": "missions-20260925-e71c3c",
+  "created_at": "2026-09-26T00:10:00.728Z",
+  "code_revision": "da491e25edb12011cb2c69d23e036e42b51e5589",
+  "fixtures": [
+    {
+      "id": "F1",
+      "name": "normal completion",
+      "description": "No crash, default open/accessible world. Every step books once.",
+      "crashPoint": null,
+      "worldEditsBeforeStart": [],
+      "worldEditsWhileStopped": [],
+      "statusUrlOverride": null,
+      "expected": {
+        "verdict": "VALID",
+        "reasonIncludes": [],
+        "committedBySlot": {
+          "ferry": 1,
+          "campsite": 1,
+          "permit": 1,
+          "gear": 1
+        },
+        "campsiteBooked": true
+      }
+    },
+    {
+      "id": "F2",
+      "name": "kill after intent",
+      "description": "Crash armed after_intent on the ferry step (R01): no initial effect; resumed request reuses the original key.",
+      "crashPoint": "after_intent",
+      "worldEditsBeforeStart": [],
+      "worldEditsWhileStopped": [],
+      "statusUrlOverride": null,
+      "expected": {
+        "verdict": "VALID",
+        "reasonIncludes": [],
+        "committedBySlot": {
+          "ferry": 1,
+          "campsite": 1,
+          "permit": 1,
+          "gear": 1
+        },
+        "campsiteBooked": true
+      }
+    },
+    {
+      "id": "F3",
+      "name": "kill after desk commit plus site-A closure",
+      "description": "Crash armed after_desk_commit on the ferry step (R02); site-A closes while the runner is stopped; DR must repair the campsite step from revalidated evidence.",
+      "crashPoint": "after_desk_commit",
+      "worldEditsBeforeStart": [],
+      "worldEditsWhileStopped": [
+        {
+          "site": "A",
+          "status": "closed",
+          "notice": "Storm damage (mission batch)"
+        }
+      ],
+      "statusUrlOverride": null,
+      "expected": {
+        "verdict": "VALID",
+        "reasonIncludes": [],
+        "committedBySlot": {
+          "ferry": 1,
+          "campsite": 1,
+          "permit": 1,
+          "gear": 1
+        },
+        "campsiteBooked": true
+      }
+    },
+    {
+      "id": "F4",
+      "name": "kill after receipt",
+      "description": "Crash armed after_receipt on the ferry step (R03): the completed ferry action must not be resent on resume.",
+      "crashPoint": "after_receipt",
+      "worldEditsBeforeStart": [],
+      "worldEditsWhileStopped": [],
+      "statusUrlOverride": null,
+      "expected": {
+        "verdict": "VALID",
+        "reasonIncludes": [],
+        "committedBySlot": {
+          "ferry": 1,
+          "campsite": 1,
+          "permit": 1,
+          "gear": 1
+        },
+        "campsiteBooked": true
+      }
+    },
+    {
+      "id": "F5",
+      "name": "required source unreachable",
+      "description": "statusUrl points at a closed loopback port from mission creation. Ferry/permit/gear do not depend on the status page; the campsite step must stay honestly blocked, never treat an unverified source as open.",
+      "crashPoint": null,
+      "worldEditsBeforeStart": [],
+      "worldEditsWhileStopped": [],
+      "statusUrlOverride": "http://127.0.0.1:1/status.html",
+      "expected": {
+        "verdict": "BLOCKED",
+        "reasonIncludes": [
+          "source_unverified"
+        ],
+        "committedBySlot": {
+          "ferry": 1,
+          "permit": 1,
+          "gear": 1,
+          "campsite": 0
+        },
+        "campsiteBooked": false
+      }
+    },
+    {
+      "id": "F6",
+      "name": "no accessible alternative",
+      "description": "Site A and site C are closed before the mission starts; site B is open but not accessible; no valid campsite candidate exists.",
+      "crashPoint": null,
+      "worldEditsBeforeStart": [
+        {
+          "site": "A",
+          "status": "closed",
+          "notice": "Storm damage (mission batch)"
+        },
+        {
+          "site": "C",
+          "status": "closed",
+          "notice": "Flooded access road (mission batch)"
+        }
+      ],
+      "worldEditsWhileStopped": [],
+      "statusUrlOverride": null,
+      "expected": {
+        "verdict": "BLOCKED",
+        "reasonIncludes": [
+          "no_accessible_site_available"
+        ],
+        "committedBySlot": {
+          "ferry": 1,
+          "permit": 1,
+          "gear": 1,
+          "campsite": 0
+        },
+        "campsiteBooked": false
+      }
+    }
+  ],
+  "crash_schedule": [
+    {
+      "fixture": "F2",
+      "point": "after_intent"
+    },
+    {
+      "fixture": "F3",
+      "point": "after_desk_commit"
+    },
+    {
+      "fixture": "F4",
+      "point": "after_receipt"
+    }
+  ],
+  "model_ids": {
+    "planner": "gpt-5.5-2026-04-23",
+    "liquid": "LiquidAI/LFM2.5-1.2B-Instruct-GGUF"
+  }
+}
