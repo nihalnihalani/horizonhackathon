@@ -67,6 +67,19 @@ export type AgUiHandlerCtx = { actorId: string };
  */
 type PortHandle = (text: string, threadId: string, ctx?: AgUiHandlerCtx) => AsyncIterable<string>;
 
+/**
+ * CopilotKit's Intelligence runtime names a new thread by re-running the agent with a system prompt that starts
+ * "You generate short, specific conversation titles." and the user's text (retrying up to 3 times on a non-JSON
+ * answer). That is not a user command: answering it through the mission port would execute "plan" again.
+ */
+export function isThreadTitleRequest(input: RunAgentInput): boolean {
+  return input.messages.some((m) => {
+    const x = m as { role: string; content?: unknown };
+    return x.role === "system" && typeof x.content === "string" && x.content.startsWith("You generate short, specific conversation titles.");
+  });
+}
+export const THREAD_TITLE_JSON = JSON.stringify({ title: "Dead Reckoning mission" });
+
 /** Pure event generator, exported for tests: the full AG-UI event sequence for one run. */
 export async function* runEvents(
   port: AgUiMissionPort,
@@ -77,6 +90,12 @@ export async function* runEvents(
   const messageId = randomUUID();
   yield { type: EventType.RUN_STARTED, threadId, runId } as BaseEvent;
   yield { type: EventType.TEXT_MESSAGE_START, messageId, role: "assistant" } as BaseEvent;
+  if (isThreadTitleRequest(input)) {
+    yield { type: EventType.TEXT_MESSAGE_CONTENT, messageId, delta: THREAD_TITLE_JSON } as BaseEvent;
+    yield { type: EventType.TEXT_MESSAGE_END, messageId } as BaseEvent;
+    yield { type: EventType.RUN_FINISHED, threadId, runId } as BaseEvent;
+    return;
+  }
   try {
     const handle = port.handle as PortHandle;
     for await (const chunk of handle(lastUserText(input), threadId, ctx)) {

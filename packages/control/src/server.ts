@@ -119,12 +119,12 @@ function safeEqual(a: string, b: string): boolean {
 const bearer = (req: IncomingMessage) => (req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
 const send = (res: ServerResponse, r: CommandResult) => json(res, r.http, r.body);
 
-export type ControlDeps = { actor: MissionActor; cfg: ConfigOf<"control">; ops: DemoOps };
+export type ControlDeps = { actor: MissionActor; cfg: ConfigOf<"control">; ops: DemoOps; narrate?: boolean };
 
-export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
+export function createControlHandler({ actor, cfg, ops, narrate = true }: ControlDeps) {
   // Narrated story lines for the board: the same wording the chat uses, published live as SSE "story" events.
   const storyNarrator = new Narrator();
-  actor.subscribe((e) => {
+  if (narrate) actor.subscribe((e) => {
     if (e.type === "story") return;
     const text = storyNarrator.line(e);
     if (text) actor.publish("story", { text }, { arm: e.arm, run_id: e.run_id });
@@ -281,7 +281,12 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
       // F8: listing requires a caller; OpenBot actors see only their own missions, the operator sees all
       const who = caller(req);
       if (!who) return apiError(res, 401, { code: "UNAUTHORIZED", message: "internal token with x-dr-actor-id, or operator token, required", retryable: false });
-      return json(res, 200, { missions: actor.snapshot().filter((x) => who.admin || actor.byId.get(x.run_id)?.meta.ownerId === who.ownerId) });
+      return json(res, 200, { missions: actor.snapshot()
+        .filter((x) => who.admin || actor.byId.get(x.run_id)?.meta.ownerId === who.ownerId)
+        .map((x) => {
+          const m = actor.byId.get(x.run_id)!;
+          return { ...x, missionId: x.run_id, revision: actor.revision(x.run_id), goal: m.meta.goal, updatedAt: m.updatedAt };
+        }) });
     }
     // Read-only, loopback-only view like /status.md; counts come from the desk's own ledger.
     if ((p === "/scorecard" || p === "/events") && !operatorRead(req)) {
@@ -329,13 +334,13 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
         const a = String(b.arm ?? "both");
         const arms: Arm[] = a === "both" ? ["dr", "naive"] : [a as Arm];
         const statusUrl = typeof b.status_url === "string" ? b.status_url : await resolveStatusUrl();
+        const r = actor.reserveStart(arms);
+        if ("blocker" in r) return json(res, 409, { error: r.blocker });
         try {
-          const blocker = actor.startBlocker(arms);
-          if (blocker) throw new Error(blocker);
           if (b.reset !== false) await ops.reset();
-          const ms = await actor.start(arms, { crash: b.crash !== false, statusUrl });
+          const ms = await actor.startReserved(arms, { crash: b.crash !== false, statusUrl });
           return json(res, 200, { started: ms.map((x) => ({ arm: x.arm, run_id: x.run_id, pid: x.pid })), status_url: statusUrl });
-        } catch (e) { return json(res, 409, { error: (e as Error).message }); }
+        } catch (e) { return json(res, 409, { error: (e as Error).message }); } finally { r.release(); }
       }
       if (p === "/demo/kill") return json(res, 200, { killed: await actor.kill(b.all === true) });
       if (p === "/demo/resume") {
@@ -359,6 +364,7 @@ export function createControlHandler({ actor, cfg, ops }: ControlDeps) {
 }
 
 function main() {
+  if (process.env.DR_DEMO_MODE === "local") throw new Error("Use npm run demo:local for key-free rehearsal; dev:control is the hosted provider entrypoint.");
   const cfg = loadConfig("control");
   const PORT = Number(cfg.DR_CONTROL_PORT);
   // Durable canonical events (CONTRACTS §4). DR_EVENT_LOG=memory keeps the non-durable in-memory log for offline dev.

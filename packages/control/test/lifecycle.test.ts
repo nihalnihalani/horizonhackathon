@@ -378,3 +378,16 @@ describe("planRevision (invariant 17 binding) + /events operator auth", () => {
     expect((await fetch(`${base}/board`)).status).not.toBe(401); // the board page itself stays open (no data)
   });
 });
+
+describe("concurrent legacy starts (chat retry / double click)", () => {
+  it("only one of two concurrent reserveStart calls wins; the other is refused until release", () => {
+    const a = actor.reserveStart(["dr", "naive"]);
+    const b = actor.reserveStart(["dr", "naive"]);
+    expect("release" in a).toBe(true);
+    expect(b).toEqual({ blocker: "a start is already in progress" });
+    if ("release" in a) a.release();
+    const c = actor.reserveStart(["dr"]);
+    expect("release" in c).toBe(true);
+    if ("release" in c) c.release();
+  });
+});

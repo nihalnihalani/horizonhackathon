@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Dead Reckoning · Local rehearsal</title>
+  <style>
+    :root{--bg:#101d24;--panel:#15262f;--panel2:#1c3039;--ink:#edf0e7;--muted:#a4b5b8;--line:#344851;--green:#c7f57e;--amber:#f6c274;--red:#f29d89;--paper:#f0eddf;--paper-ink:#23322b}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Avenir Next",Avenir,"Trebuchet MS",sans-serif}button{font:inherit}button:focus-visible,summary:focus-visible,a:focus-visible{outline:3px solid var(--amber);outline-offset:4px}button:disabled{cursor:not-allowed;opacity:.4}button{cursor:pointer}button:not(:disabled):active{transform:translateY(1px)}button:not(:disabled):hover{filter:brightness(1.1)}h1,h2,h3,p{margin:0}h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(40px,5.7vw,78px);font-weight:400;line-height:1.03;letter-spacing:-.045em}h2{font-size:20px;letter-spacing:-.025em}h3{font-size:15px}code,.mono,.eyebrow{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}.eyebrow{font-size:10px;letter-spacing:.15em;text-transform:uppercase}.muted{color:var(--muted)}.small{font-size:12px}.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid currentColor;border-radius:999px;padding:3px 9px;font-size:11px;white-space:nowrap}.pill.good,.good{color:var(--green)}.pill.warn,.warn{color:var(--amber)}.pill.bad,.bad{color:var(--red)}.dot{height:7px;width:7px;background:currentColor;border-radius:50%;display:inline-block}
+    .topbar{border-bottom:1px solid var(--line);padding:17px 32px;display:flex;justify-content:space-between;align-items:center;gap:14px}.brand{display:flex;gap:10px;align-items:center;font-weight:600;font-size:13px}.compass{width:24px;height:24px;border:1px solid var(--green);border-radius:50%;display:grid;place-items:center;color:var(--green);font-size:18px}.topmeta{display:flex;gap:18px;align-items:center;flex-wrap:wrap}.shell{max-width:1490px;margin:0 auto;padding:34px 32px 28px}.intro{display:flex;justify-content:space-between;gap:30px;align-items:end;padding-bottom:30px}.intro .eyebrow{color:var(--green);margin-bottom:15px}.intro p{max-width:455px;color:var(--muted);margin-top:18px;font-size:14px}.chapter{text-align:right;flex-shrink:0}.chapter strong{display:block;font:68px/1 Georgia,serif;color:var(--green)}.chapter span{display:block;max-width:155px;margin-top:8px}.mode{display:flex;gap:9px 20px;flex-wrap:wrap;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:11px 0;color:var(--muted);font-size:11px}.mode span::before{content:"+";color:var(--green);padding-right:7px}.notice{padding:13px 16px;margin-top:16px;background:#493626;border:1px solid #795b3e;border-radius:6px;color:#ffdfad;display:flex;gap:12px;align-items:center}.notice[hidden]{display:none}.notice button{margin-left:auto;border:1px solid #a2865f;color:inherit;background:transparent;border-radius:4px;padding:5px 10px;white-space:nowrap}.error{background:#492b2a;border-color:#85564d;color:#ffcfbe}
+    .workspace{display:grid;grid-template-columns:minmax(0,1fr) 365px;gap:22px;margin-top:24px}.left{min-width:0}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:15px}.section-head .eyebrow{color:var(--muted)}.mission-panel{border:1px solid var(--line);background:var(--panel);border-radius:10px;overflow:hidden}.mission-head{padding:21px 22px;display:flex;gap:20px;align-items:start;justify-content:space-between}.mission-head h2{font-size:23px}.mission-id{font-size:10px;margin-top:5px;overflow-wrap:anywhere}.constraints{padding:0 22px 20px;display:flex;flex-wrap:wrap;gap:8px}.constraint{background:var(--panel2);padding:5px 9px;border-radius:3px;font-size:11px;color:#dce5db}.route{position:relative;padding:28px 22px 24px;background-image:linear-gradient(#24374066 1px,transparent 1px),linear-gradient(90deg,#24374066 1px,transparent 1px);background-size:23px 23px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}.route-top{display:flex;justify-content:space-between;margin-bottom:28px}.route-top span:last-child{font-size:10px;color:var(--muted)}.route-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));position:relative;gap:12px}.route-steps::before{content:"";position:absolute;top:24px;left:7%;right:7%;border-top:1px dashed #7a969c}.step{position:relative;min-width:0}.step-icon{height:50px;width:50px;border:1px solid #566b72;display:grid;place-items:center;background:var(--bg);border-radius:50%;margin-bottom:14px;color:var(--muted)}.step-icon svg{width:25px;height:25px;stroke:currentColor;fill:none;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}.step.is-recorded .step-icon{background:var(--green);color:#1a3226;border-color:var(--green)}.step.is-committed .step-icon{background:#453829;color:var(--amber);border-color:var(--amber)}.step.is-intent .step-icon{color:var(--ink);border-color:var(--ink)}.step-status{font-size:10px;margin-top:4px;min-height:30px}.step-resource{font:10px/1.5 "SFMono-Regular",Consolas,monospace;color:var(--muted);overflow-wrap:anywhere;margin-top:7px}.legend{display:flex;gap:15px;margin-top:22px;flex-wrap:wrap;font-size:10px;color:var(--muted)}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:6px;height:6px;display:inline-block;border-radius:50%;background:currentColor}.mission-summary{padding:17px 22px;display:flex;justify-content:space-between;gap:20px;align-items:center}.mission-summary p{font-size:13px;max-width:560px}.mission-summary .cost{text-align:right;white-space:nowrap}.cost strong{font:29px/1 Georgia,serif;display:block}.cost span{font-size:10px;color:var(--muted)}.worker{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:12px;border:1px solid var(--line);border-radius:6px}.worker>div{padding:13px 16px;border-right:1px solid var(--line);min-width:0}.worker>div:last-child{border:0}.worker dt{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}.worker dd{margin:5px 0 0;font-size:12px;overflow-wrap:anywhere}.world{margin-top:25px}.sites{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.site{border:1px solid var(--line);border-radius:7px;padding:15px;background:var(--panel)}.site-top{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:12px}.site h3{font:24px/1 Georgia,serif}.site p{font-size:11px;color:var(--muted);margin-top:6px}.site.observed-closed{border-color:#916352}.site .price{font:16px Georgia,serif;color:var(--ink)}.source-note{font-size:11px;color:var(--muted);margin-top:10px}.proof-area{margin-top:24px}.evidence{width:100%;border-collapse:collapse;font-size:11px}.evidence th{text-align:left;color:var(--muted);font-weight:400;border-bottom:1px solid var(--line);padding:8px}.evidence td{padding:10px 8px;border-bottom:1px solid #283e47;vertical-align:top;overflow-wrap:anywhere}.evidence td:first-child{font-family:"SFMono-Regular",Consolas,monospace}.table-wrap{overflow-x:auto}.empty{padding:24px 0;color:var(--muted);font-size:12px;line-height:1.7}.ops{border:1px solid var(--line);border-radius:10px;padding:21px;background:var(--panel)}.ops h2{margin-top:7px;margin-bottom:18px}.actions{display:grid;gap:9px}.action{display:flex;width:100%;align-items:center;gap:13px;border:1px solid #425b63;background:transparent;color:var(--ink);border-radius:6px;padding:12px;text-align:left;transition:background .15s}.action .num{font:11px "SFMono-Regular",Consolas,monospace;color:var(--muted)}.action .action-text{flex:1}.action strong{display:block;font-size:13px;font-weight:600}.action small{display:block;font-size:10px;line-height:1.5;color:var(--muted);margin-top:2px}.action.primary{background:var(--green);border-color:var(--green);color:#152922}.action.primary small,.action.primary .num{color:#3e5435}.action.danger:not(:disabled){border-color:#9a6757;color:#ffc2a5}.action .arrow{font-size:19px}.new-run{background:transparent;color:var(--muted);font-size:11px;border:0;border-bottom:1px dotted var(--muted);padding:3px 0;margin-top:15px}.authorization{border-top:1px solid var(--line);padding-top:13px;margin-top:16px;font-size:10px;color:var(--muted)}.live-feedback{font-size:11px;margin-top:12px;min-height:17px;color:var(--green)}
+    .ledger{position:relative;background:var(--paper);color:var(--paper-ink);padding:24px 21px 27px;margin-top:21px;clip-path:polygon(0 0,100% 0,100% calc(100% - 8px),97% 100%,94% calc(100% - 8px),91% 100%,88% calc(100% - 8px),85% 100%,82% calc(100% - 8px),79% 100%,76% calc(100% - 8px),73% 100%,70% calc(100% - 8px),67% 100%,64% calc(100% - 8px),61% 100%,58% calc(100% - 8px),55% 100%,52% calc(100% - 8px),49% 100%,46% calc(100% - 8px),43% 100%,40% calc(100% - 8px),37% 100%,34% calc(100% - 8px),31% 100%,28% calc(100% - 8px),25% 100%,22% calc(100% - 8px),19% 100%,16% calc(100% - 8px),13% 100%,10% calc(100% - 8px),7% 100%,4% calc(100% - 8px),0 100%)}.ledger .eyebrow{color:#657365}.ledger h2{font:28px/1.1 Georgia,serif;margin-top:8px}.ledger .desc{color:#5f6d61;font-size:11px;margin-top:9px}.ledger .empty{color:#647464}.ledger-row{padding:13px 0;border-bottom:1px dashed #a4ad99}.ledger-row-top{display:flex;justify-content:space-between;gap:12px;font-size:13px}.ledger-row .receipt-id{font:10px/1.5 "SFMono-Regular",Consolas,monospace;overflow-wrap:anywhere;color:#5f6d61;margin-top:5px}.ledger-row .stamp{display:inline-block;border:1px solid #467644;color:#345c31;text-transform:uppercase;letter-spacing:.06em;font-size:8px;margin-top:7px;padding:2px 5px}.ledger-row .stamp.pending{border-color:#967534;color:#7a5a1c}.ledger-row .stamp.rejected{border-color:#9d5a46;color:#91442f}.ledger-total{margin-top:16px;display:flex;justify-content:space-between;gap:10px;font-size:10px}.ledger-total strong{font:23px/1 Georgia,serif}.ledger .boundary{background:#e1dfca;border-left:2px solid #7c824e;padding:10px;font-size:10px;margin-top:16px}.context{margin-top:24px;padding:18px;border:1px solid var(--line);border-radius:7px}.context p{font-size:11px;color:var(--muted);margin-top:10px}.context-ops{list-style:none;padding:0;margin:10px 0 0}.context-ops li{border-top:1px solid var(--line);padding-top:8px;margin-top:8px;font-size:10px;overflow-wrap:anywhere}.history{margin-top:25px;border-top:1px solid var(--line);padding-top:15px}.history summary{cursor:pointer;color:var(--muted);font-size:11px}.events{max-height:250px;overflow:auto;margin-top:15px;font:10px/1.7 "SFMono-Regular",Consolas,monospace}.event{display:grid;grid-template-columns:70px 1fr;gap:12px;padding:5px 0;border-bottom:1px solid #273d47}.event time{color:var(--muted)}.event span{overflow-wrap:anywhere}footer{margin-top:32px;border-top:1px solid var(--line);padding-top:18px;display:flex;gap:20px;justify-content:space-between;color:var(--muted);font-size:10px}footer p{max-width:650px}.no-script{padding:20px;background:#492b2a;color:#ffcfbe}.pulse .dot{animation:pulse 1.8s infinite}@keyframes pulse{50%{opacity:.35}}@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+    @media(min-width:1600px){.shell{padding-top:45px}.workspace{gap:28px}.intro{padding-bottom:40px}.route{padding-top:36px;padding-bottom:32px}}@media(max-width:1050px){.workspace{grid-template-columns:minmax(0,1fr) 300px;gap:16px}.shell{padding:27px 22px}.topbar{padding:16px 22px}.mission-head,.constraints,.route,.mission-summary{padding-left:16px;padding-right:16px}.site{padding:12px}.site-top{align-items:start;flex-direction:column}.step-status{min-height:43px}.worker>div{padding:12px 9px}.ops{padding:17px}.chapter{display:none}}@media(max-width:780px){.workspace{grid-template-columns:1fr}.right{display:contents}.ops{grid-row:1}.left{grid-row:2}.ledger{grid-row:3}.context{grid-row:4}.topmeta .eyebrow{display:none}.shell{padding:24px 16px}.topbar{padding:14px 16px}.intro{padding-bottom:24px}.intro p{max-width:100%}.route{padding-top:24px}.route-top{margin-bottom:24px}.mission-summary{align-items:start}.worker{grid-template-columns:repeat(2,minmax(0,1fr))}.worker>div:nth-child(2){border-right:0}.worker>div:nth-child(-n+2){border-bottom:1px solid var(--line)}.actions{grid-template-columns:1fr 1fr}.authorization{font-size:11px}.ledger{margin-top:0}.context{margin-top:0}.chapter{display:none}footer{flex-direction:column;gap:8px}}@media(max-width:450px){.mission-head{gap:10px}.mission-head h2{font-size:19px}.route-steps{gap:8px}.step-icon{width:42px;height:42px}.route-steps::before{top:21px}.step h3{font-size:13px}.step-resource{font-size:9px}.sites{gap:6px}.site{padding:10px}.site .pill{font-size:9px;padding:2px 6px}.mission-summary{flex-direction:column}.mission-summary .cost{text-align:left}.actions{grid-template-columns:1fr}.evidence{font-size:10px}.topmeta{gap:8px}}
+  </style>
+</head>
+<body>
+<noscript><div class="no-script">Enable JavaScript to operate the local rehearsal. No action has been taken by this page.</div></noscript>
+<header class="topbar">
+  <div class="brand"><span class="compass" aria-hidden="true">↟</span> DEAD RECKONING <span class="muted">/ mission control</span></div>
+  <div class="topmeta"><span class="eyebrow">Local rehearsal</span><span id="connection" class="pill warn"><i class="dot"></i>Connecting</span></div>
+</header>
+<main class="shell">
+  <section class="intro" aria-labelledby="title">
+    <div><div class="eyebrow">A trip agent, interrupted.</div><h1>The world moved.<br>The mission survives.</h1><p>Book a ferry. Cut the worker’s power. Close a campsite.<br>Watch it recover the receipt and repair the unfinished trip.</p></div>
+    <div class="chapter"><strong id="booking-progress">00 / 04</strong><span class="eyebrow">Committed bookings.<br>Simulated local desk.</span></div>
+  </section>
+  <div class="mode" aria-label="Rehearsal implementation"><span>No API keys</span><span>Deterministic planner &amp; curator</span><span>Local persisted state</span><span>Simulated bookings</span><span>Actual child SIGKILL</span></div>
+  <div class="notice" id="stale" role="status" hidden><span id="stale-text">Connection interrupted. Showing last observed state.</span><button id="reconnect" type="button">Retry connection</button></div>
+  <div class="notice error" id="error" role="alert" hidden></div>
+  <div class="workspace">
+    <div class="left">
+      <div class="section-head"><h2>The trip</h2><span class="eyebrow" id="revision">Awaiting first run</span></div>
+      <section class="mission-panel" aria-label="Mission progress">
+        <div class="mission-head"><div><h2>Angel Island weekend</h2><p class="mission-id mono muted" id="mission-id">F3 · local rehearsal fixture</p></div><span class="pill" id="mission-status">Ready to start</span></div>
+        <div class="constraints" id="constraints"><span class="constraint">2 travelers</span><span class="constraint">Wheelchair access required</span><span class="constraint">Budget $400</span><span class="constraint">Oct 9–11, 2026 · fixture dates</span></div>
+        <div class="route"><div class="route-top"><span class="eyebrow">The booking route</span><span>Illustrative sequence · live state below</span></div><div class="route-steps" id="steps"></div><div class="legend"><span style="color:var(--green)"><i></i>Receipt recorded</span><span style="color:var(--amber)"><i></i>Desk committed, receipt pending</span><span><i></i>Unfinished</span></div></div>
+        <div class="mission-summary"><p id="summary">Start a mission to launch the worker. It pauses after the ferry is committed, before the receipt is saved to mission state.</p><div class="cost"><strong id="spend">—</strong><span>independent desk spend</span></div></div>
+      </section>
+      <dl class="worker" aria-label="Observed worker process"><div><dt>Worker</dt><dd id="worker-state">Not started</dd></div><div><dt>PID / generation</dt><dd id="worker-pid" class="mono">— / —</dd></div><div><dt>Last observed exit</dt><dd id="worker-exit" class="mono">—</dd></div><div><dt>Reconciliation</dt><dd id="reconciliation">—</dd></div></dl>
+      <section class="world" aria-labelledby="world-title"><div class="section-head"><h2 id="world-title">The world can change</h2><span class="eyebrow" id="world-version">World version —</span></div><div class="sites" id="sites"><p class="empty">Reading the local desk’s resource state…</p></div><p class="source-note">These are the desk’s current conditions. The worker’s observations below can lag behind until it revalidates.</p></section>
+      <section class="proof-area" aria-labelledby="evidence-title"><div class="section-head"><h2 id="evidence-title">What the agent knows</h2><span class="eyebrow">Persisted evidence</span></div><div class="table-wrap" id="evidence"><p class="empty">No mission observations yet. Site evidence appears after the worker reads the local fixture feed.</p></div></section>
+      <details class="history"><summary>Inspect observed process and state events</summary><div class="events" id="events"><p class="empty">No events observed yet.</p></div></details>
+    </div>
+    <aside class="right" aria-label="Operations and independent proof">
+      <section class="ops"><div class="eyebrow muted">You control the interruption</div><h2>Run the experiment</h2><div class="actions">
+        <button type="button" class="action primary" id="start" disabled><span class="num">01</span><span class="action-text"><strong>Start mission</strong><small>Commit ferry, then hold the worker</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+        <button type="button" class="action danger" id="kill" disabled><span class="num">02</span><span class="action-text"><strong>Crash worker</strong><small>Send SIGKILL to the owned child</small></span><span class="arrow" aria-hidden="true">×</span></button>
+        <button type="button" class="action" id="close" disabled><span class="num">03</span><span class="action-text"><strong>Close Site A</strong><small>Change the simulated world</small></span><span class="arrow" aria-hidden="true">↘</span></button>
+        <button type="button" class="action" id="resume" disabled><span class="num">04</span><span class="action-text"><strong>Resume mission</strong><small>Restore, reconcile, revalidate, finish</small></span><span class="arrow" aria-hidden="true">→</span></button>
+      </div><button type="button" class="new-run" id="new-run" disabled>New run · keep previous ledger proof</button><div class="live-feedback" id="feedback" role="status" aria-live="polite"></div><p class="authorization">Start and Resume authorize simulated bookings for the fixture trip. No real reservations or payments. The crash kills the worker process; the control service and desk remain running.</p></section>
+      <section class="ledger" aria-labelledby="ledger-title"><div class="eyebrow">Independent desk · SQLite</div><h2 id="ledger-title">The booking ledger</h2><p class="desc">The desk is the authority on committed effects, even when the agent has no receipt yet.</p><div id="ledger-rows"><p class="empty">No mission selected.<br>The first ferry commitment will appear here.</p></div><div class="ledger-total"><span id="ledger-count">0 effects · 0 requests</span><strong id="ledger-total">—</strong></div><p class="boundary" id="boundary">The test boundary is between the desk’s commit and the agent’s receipt write.</p></section>
+      <section class="context"><div class="section-head"><h3>Working memory</h3><span class="eyebrow" id="tokens">— tokens</span></div><p>Accessibility, budget and committed receipts stay pinned. Old campsite observations can be superseded after revalidation.</p><ul id="context-ops" class="context-ops"></ul><p>Planner and curator are deterministic local rules in this rehearsal. Token figures, if present, are local input estimates.</p></section>
+    </aside>
+  </div>
+  <footer><p><strong>Standalone local fallback.</strong> This page operates the Dead Reckoning control actor directly. It does not run the hosted OpenBot chat, sponsor services, or a live language model.</p><p id="updated">Waiting for local state…</p></footer>
+</main>
+<script>
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const money = n => typeof n === 'number' && Number.isFinite(n) ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(n/100) : '—';
+  const clock = ts => { const d = new Date(ts); return Number.isNaN(d.getTime()) ? '—' : d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'}); };
+  const decoded = value => { if (typeof value !== 'string') return value; try { return JSON.parse(value); } catch { return value; } };
+  const html = (id, value) => { if ($(id).innerHTML !== value) $(id).innerHTML = value; };
+  const text = (id, value) => { $(id).textContent = String(value ?? '—'); };
+  const icons = {
+    ferry:'<path d="M4 15l8 4 8-4-2 6H6zM6 15V8h12v7M9 8V4h6v4M3 23c2 1 4 1 6 0 2 1 4 1 6 0 2 1 4 1 6 0"/>',
+    campsite:'<path d="M2 22L12 3l10 19zM8 22l4-9 4 9M10 3l2 4 2-4"/>',
+    permit:'<path d="M5 2h10l4 4v16H5zM14 2v5h5M8 11h8M8 15h6M8 19h3"/>',
+    gear:'<path d="M8 5V3h8v2M5 10a7 7 0 0114 0v12H5zM5 11h14M8 15h8v4H8zM2 12v7M22 12v7"/>'
+  };
+  let state = null, connected = false, busy = '', pollTimer = null, pollPromise = null, lastUpdated = null;
+  const current = () => {
+    const summaries = state?.missions ?? [];
+    const summary = summaries.find(m => m.arm === 'dr') ?? summaries[0] ?? null;
+    const snapshots = (state?.snapshots ?? []).filter(Boolean);
+    const mission = snapshots.find(m => m.missionId === summary?.run_id) ?? snapshots.find(m => m.arm === 'dr') ?? null;
+    const ledger = (state?.ledger ?? []).find(l => l.run_id === (mission?.missionId ?? summary?.run_id)) ?? null;
+    return {summary, mission, ledger};
+  };
+  function controls() {
+    const {summary, mission} = current();
+    const worker = mission?.worker?.state ?? summary?.state;
+    const live = ['running','starting','holding'].includes(worker);
+    const status = mission?.status ?? summary?.status;
+    const locked = !connected || !!busy;
+    const terminal = ['valid','failed','cancelled','cancelling'].includes(status);
+    $('start').disabled = locked || !!summary || !!mission;
+    $('kill').disabled = locked || !live;
+    $('close').disabled = locked || !mission || live || (state?.resources ?? []).find(r => r.id === 'site-A')?.status === 'closed';
+    $('resume').disabled = locked || !mission || live || terminal;
+    $('new-run').disabled = locked || !mission || live || !['valid','blocked','failed'].includes(status);
+  }
+  function render() {
+    const {summary,mission,ledger} = current();
+    const outcomes = ledger?.outcomes ?? [];
+    const committed = outcomes.filter(r => r.committed && !r.cancelled);
+    const receipts = mission?.receipts ?? [];
+    const total = committed.reduce((n,r) => n + Number(r.amount || 0),0);
+    const worker = mission?.worker;
+    const workerState = worker?.state ?? summary?.state;
+    const missionStatus = mission?.status ?? summary?.status;
+    const uncertain = committed.filter(r => !receipts.some(a => a.receiptId === r.receipt_id));
+    const verdict = mission?.verdict;
+    text('booking-progress',`${String(new Set(committed.map(r => r.slot)).size).padStart(2,'0')} / 04`);
+    text('revision',mission ? `Revision ${mission.revision} · generation ${worker.generation}` : 'Awaiting first run');
+    text('mission-id',mission?.missionId ?? 'F3 · local rehearsal fixture');
+    text('mission-status',workerState === 'holding' ? 'At crash boundary' : missionStatus ? missionStatus.replaceAll('_',' ') : 'Ready to start');
+    $('mission-status').className = `pill ${missionStatus === 'valid' ? 'good' : missionStatus === 'blocked' || missionStatus === 'failed' ? 'bad' : workerState === 'holding' ? 'warn' : ''}`;
+    const c = Object.fromEntries((mission?.constraints ?? []).map(v => [v.key,decoded(v.value)]));
+    if (mission?.constraints?.length) html('constraints',[
+      `${esc(c.party_size ?? '—')} travelers`,
+      c.accessible_required === true ? 'Wheelchair access required' : `Accessibility constraint: ${esc(c.accessible_required ?? 'unknown')}`,
+      `Budget ${esc(money(c.budget_cents))}`,
+      c.dates ? `${esc(c.dates.start)} → ${esc(c.dates.end)} · fixture dates` : 'Fixture dates pending'
+    ].map(v => `<span class="constraint">${v}</span>`).join(''));
+    html('steps',['ferry','campsite','permit','gear'].map((slot,i) => {
+      const receipt = receipts.find(r => r.slot === slot && r.outcome === 'committed');
+      const effect = committed.find(r => r.slot === slot);
+      const intent = (mission?.commitments ?? []).find(r => r.slot === slot && !['rejected','cancelled'].includes(r.status));
+      const step = (mission?.plan ?? []).find(s => s.slot === slot);
+      const stateClass = receipt ? 'is-recorded' : effect ? 'is-committed' : intent ? 'is-intent' : '';
+      const status = receipt ? (receipt.recovered ? 'Receipt recovered' : 'Receipt recorded') : effect ? 'Committed · receipt pending' : intent ? `Intent ${intent.status}` : step?.status ?? 'Not started';
+      return `<div class="step ${stateClass}"><div class="step-icon" aria-hidden="true"><svg viewBox="0 0 24 26">${icons[slot]}</svg></div><h3>${['Ferry','Campsite','Permit','Gear'][i]}</h3><div class="step-status ${receipt ? 'good' : effect ? 'warn' : 'muted'}">${esc(status)}</div><div class="step-resource">${esc(receipt?.resource ?? effect?.resource ?? step?.resource ?? '—')}</div></div>`;
+    }).join(''));
+    text('spend',ledger ? money(total) : '—');
+    let summaryText = 'Start a mission to launch the worker. It pauses after the ferry is committed, before the receipt is saved to mission state.';
+    if (mission) {
+      if (verdict) summaryText = `${verdict.verdict}: ${verdict.reason}`;
+      else if (mission.blockedReason) summaryText = `Blocked: ${mission.blockedReason}`;
+      else if (workerState === 'holding') summaryText = 'The desk committed the ferry. The worker is holding before its receipt write. Crash it now to test the uncertain outcome.';
+      else if (worker?.lastExit?.signal === 'SIGKILL' && !['running','starting'].includes(workerState)) summaryText = 'The worker is confirmed stopped. The desk commitment remains. Close Site A, then Resume to reconcile the receipt and refresh the unfinished plan.';
+      else if (workerState === 'running' || workerState === 'starting') summaryText = `Worker ${worker.pid ?? 'starting'} is ${missionStatus ?? 'working'}. Only observed desk effects and persisted receipts appear here.`;
+      else summaryText = `Mission ${missionStatus ?? 'created'}. ${uncertain.length ? 'The desk has outcomes the mission has not yet recorded.' : 'Resume starts a new worker when the lifecycle permits.'}`;
+    }
+    text('summary',summaryText);
+    text('worker-state',workerState ?? 'Not started');
+    text('worker-pid',worker ? `${worker.pid ?? '—'} / ${worker.generation}` : '— / —');
+    text('worker-exit',worker?.lastExit ? `${worker.lastExit.pid} · ${worker.lastExit.signal ?? `code ${worker.lastExit.code}`}` : '—');
+    text('reconciliation',mission?.reconciliationStatus ?? '—');
+    text('world-version',`World version ${state?.world?.version ?? state?.world?.world_version ?? '—'}`);
+    const sites = (state?.resources ?? []).filter(r => ['site-A','site-B','site-C'].includes(r.id));
+    if (sites.length) html('sites',sites.map(r => `<article class="site ${r.status === 'closed' ? 'observed-closed' : ''}"><div class="site-top"><h3>${esc(r.id.replace('site-','Site '))}</h3><span class="pill ${r.status === 'closed' ? 'bad' : 'good'}">${esc(r.status)}</span></div><div class="price">${esc(money(r.price_cents))}</div><p>${r.accessible ? 'Wheelchair accessible' : 'Not wheelchair accessible'}</p>${r.notice ? `<p>${esc(r.notice)}</p>` : ''}</article>`).join(''));
+    const facts = (mission?.facts ?? []).filter(f => /site-[ABC]\.(status|accessible)/.test(f.key));
+    html('evidence',facts.length ? `<table class="evidence"><thead><tr><th>Fact</th><th>Observed value</th><th>State</th><th>Observed at</th></tr></thead><tbody>${facts.map(f => `<tr><td>${esc(f.key)}</td><td>${esc(typeof f.value === 'object' ? JSON.stringify(f.value) : f.value)}</td><td>${esc(f.status)}</td><td>${esc(clock(f.observedAt))}<br><span class="muted">Local fixture feed</span></td></tr>`).join('')}</tbody></table>` : '<p class="empty">No mission observations yet. Site evidence appears after the worker reads the local fixture feed.</p>');
+    html('ledger-rows',outcomes.length ? outcomes.map(r => {
+      const record = receipts.find(a => a.receiptId === r.receipt_id);
+      const stamp = !r.committed ? 'Rejected by desk' : record?.recovered ? 'Recovered · same receipt' : record ? 'Recorded by agent' : 'Agent receipt pending';
+      return `<article class="ledger-row"><div class="ledger-row-top"><strong>${esc(r.resource)}</strong><span>${esc(money(r.amount))}</span></div><div class="receipt-id">${esc(r.receipt_id)}</div><span class="stamp ${!r.committed ? 'rejected' : !record ? 'pending' : ''}">${stamp}</span>${r.reject_reason ? `<div class="receipt-id">${esc(r.reject_reason)}</div>` : ''}</article>`;
+    }).join('') : `<p class="empty">${mission ? 'No desk outcomes for this mission yet.' : 'No mission selected.<br>The first ferry commitment will appear here.'}</p>`);
+    text('ledger-count',`${committed.length} effects · ${ledger?.requests?.length ?? 0} requests`);
+    text('ledger-total',ledger ? money(total) : '—');
+    const ferry = committed.filter(r => r.slot === 'ferry');
+    const recovered = receipts.find(r => r.slot === 'ferry' && r.recovered);
+    text('boundary',recovered ? `Recovered ferry ${recovered.receiptId}. The desk shows ${ferry.length} committed ferry effect${ferry.length === 1 ? '' : 's'} for this run.` : uncertain.length ? `${uncertain.length} desk commitment${uncertain.length === 1 ? '' : 's'} not yet recorded in mission state. A missing agent receipt does not mean the booking failed.` : 'The test boundary is between the desk’s commit and the agent’s receipt write.');
+    text('tokens',mission?.context?.tokens == null ? '— tokens' : `${mission.context.tokens} est. tokens`);
+    html('context-ops',(mission?.context?.lastOps ?? []).map(op => `<li><span class="${op.accepted ? 'good' : 'warn'}">${op.accepted ? 'Accepted' : 'Rejected'}</span> · ${esc(op.op)}<br><span class="mono">${esc(op.key)}</span><br><span class="muted">${esc(op.reason)}</span></li>`).join(''));
+    const events = (state?.events ?? []).filter(e => !e.run_id || e.run_id === mission?.missionId).filter(e => ['log','worker','story'].includes(e.type)).slice(-60).reverse();
+    html('events',events.length ? events.map(e => `<div class="event"><time>${esc(clock(e.ts))}</time><span>${esc(e.data?.line ?? e.data?.text ?? (e.data?.kind === 'event' ? `${e.data.type} · revision ${e.data.revision}` : e.type === 'worker' ? `Worker ${e.data?.state ?? e.data?.kind ?? 'update'} · PID ${e.data?.pid ?? '—'} · ${e.data?.signal ?? ''}` : JSON.stringify(e.data)))}</span></div>`).join('') : '<p class="empty">No events observed yet.</p>');
+    controls();
+  }
+  function markConnection(ok,message) {
+    connected = ok;
+    $('connection').className = `pill ${ok ? 'good pulse' : 'warn'}`;
+    html('connection',`<i class="dot"></i>${ok ? 'Local control connected' : 'Disconnected'}`);
+    $('stale').hidden = ok;
+    if (!ok) text('stale-text',`${state ? `Showing stale state from ${clock(lastUpdated)}. ` : 'Local control is unavailable. '}${message ?? 'Reconnect before taking another action.'}`);
+    controls();
+  }
+  async function poll() {
+    if (pollPromise) return pollPromise;
+    clearTimeout(pollTimer);
+    pollPromise = (async () => {
+      try {
+        const response = await fetch('/local/state',{cache:'no-store',signal:AbortSignal.timeout(5000)});
+        if (!response.ok) throw new Error(`State request returned ${response.status}.`);
+        const next = await response.json();
+        if (next.mode !== 'local' || !Array.isArray(next.missions) || !Array.isArray(next.snapshots) || !Array.isArray(next.ledger)) throw new Error('This is not the local rehearsal service. Open the URL printed by npm run demo:local.');
+        state = next; lastUpdated = new Date().toISOString();
+        markConnection(true); render();
+        text('updated',`Last observed ${clock(lastUpdated)} · polling local state`);
+      } catch (error) {
+        markConnection(false,error.message);
+      } finally {
+        pollPromise = null;
+        pollTimer = setTimeout(poll,700);
+      }
+    })();
+    return pollPromise;
+  }
+  async function action(kind) {
+    if (busy || !connected) return;
+    busy = kind; controls(); $('error').hidden = true;
+    text('feedback',({start:'Starting a real worker…',kill:'Waiting for observed worker exit…','close-site':'Updating desk world…',resume:'Restoring persisted mission state…'})[kind]);
+    try {
+      const response = await fetch('/local/action',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:kind,...(kind === 'close-site' ? {site:'site-A'} : {})}),signal:AbortSignal.timeout(30000)});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message ?? result.error ?? `Operation returned ${response.status}.`);
+      text('feedback',({start:'Start accepted. Waiting for the ferry boundary.',kill:'Crash request completed. Check the observed exit below.','close-site':'Site A update accepted. The worker must observe it again.',resume:'Resume accepted. Watching reconciliation and repair.'})[kind]);
+      if (pollPromise) await pollPromise;
+      await poll();
+    } catch (error) {
+      $('error').hidden = false;
+      text('error',`${error.message} Refresh the observed state before retrying; a lost response does not prove an action failed.`);
+      text('feedback','Operation could not be confirmed.');
+      await poll();
+    } finally { busy = ''; controls(); }
+  }
+  $('start').addEventListener('click',() => action('start'));
+  $('new-run').addEventListener('click',() => action('start'));
+  $('kill').addEventListener('click',() => action('kill'));
+  $('close').addEventListener('click',() => action('close-site'));
+  $('resume').addEventListener('click',() => action('resume'));
+  $('reconnect').addEventListener('click',poll);
+  window.addEventListener('online',poll);
+  render(); poll();
+</script>
+</body>
+</html>

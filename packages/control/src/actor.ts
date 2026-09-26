@@ -12,7 +12,7 @@ import {
   ACTIVE_STATUSES, AckError, F3, HOLD_LINE_PREFIX, REPO_ROOT, TRANSITIONS, assertRunId, buildRunnerEnv, canTransition, encodeSse, eventTypeForRow,
   hashPayload, isTableName, makeEvent, newRunId, parseRow,
   type Arm, type CanonicalEventSink, type CommandKind, type ConfigOf, type CrashPoint, type DeskClient, type EventType,
-  type FactRow, type MissionEvent, type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type SseEnvelope, type SseEventType, type TableName,
+  type FactRow, type MissionEvent, type MissionMeta, type MissionSnapshot, type MissionStatus, type Projection, type ProjectionLoader, type RowSink, type SseEnvelope, type SseEventType, type TableName,
 } from "@dr/shared";
 import {
   RawTreeClient, RawTreeEventLog, RawTreeLoader, RawTreeSink, applyEvent, applyRow, emptyProjection, restoreFromEvents, totalRows,
@@ -67,6 +67,14 @@ export type EvidenceView = {
 export type CommandResult = { http: number; body: Record<string, unknown> };
 
 export type ActorOptions = {
+  /** Set only by the isolated local entrypoint; never inferred from credentials. */
+  localMode?: boolean;
+  /** Explicit local rehearsal adapter. Never enabled by the hosted control entrypoint. */
+  storage?: {
+    sink: RowSink; loader: ProjectionLoader; label: string;
+    restore(runId: string, watermark: number): Promise<Projection>;
+    intentVisible(runId: string, actionKey: string): Promise<number>;
+  };
   events?: CanonicalEventSink;
   /** control-side desk client for lookup-only reconciliation after a runner exits while pausing/cancelling */
   desk?: DeskClient;
@@ -97,8 +105,8 @@ const STATUS_EVENT: Partial<Record<MissionStatus, EventType>> = {
 export class MissionActor {
   readonly client: RawTreeClient;
   readonly events: CanonicalEventSink;
-  private sink: RawTreeSink;
-  private loader: RawTreeLoader;
+  private sink: RowSink;
+  private loader: ProjectionLoader;
   private desk: DeskClient | null;
   private seq = 0;
   private buffer: SseEnvelope[] = [];
@@ -117,8 +125,8 @@ export class MissionActor {
 
   constructor(readonly cfg: ConfigOf<"control">, readonly controlUrl: string, readonly opts: ActorOptions = {}) {
     this.client = new RawTreeClient({ baseUrl: cfg.RAWTREE_BASE_URL, apiKey: cfg.RAWTREE_API_KEY, database: cfg.RAWTREE_DATABASE });
-    this.sink = new RawTreeSink(this.client);
-    this.loader = new RawTreeLoader(this.client);
+    this.sink = opts.storage?.sink ?? new RawTreeSink(this.client);
+    this.loader = opts.storage?.loader ?? new RawTreeLoader(this.client);
     this.events = opts.events ?? new MemoryEventLog();
     this.desk = opts.desk ?? null;
   }
@@ -211,7 +219,7 @@ export class MissionActor {
     this.canon.set(m.run_id, p);
     const payload = ev.payload as { table?: string; row?: { status?: string } };
     const outcome = ev.type === "OUTCOME_RECORDED" && payload.table === "commitments" && payload.row?.status !== "intent";
-    if (!outcome || !(this.opts.checkpoints ?? this.events instanceof RawTreeEventLog)) return;
+    if (!outcome || this.opts.storage || !(this.opts.checkpoints ?? this.events instanceof RawTreeEventLog)) return;
     try {
       await writeCheckpoint(this.client, m.run_id, ev.revision, structuredClone(p), ev);
       this.log(`checkpoint ${m.run_id}@${ev.revision} written`, m.arm, m.run_id);
@@ -363,7 +371,12 @@ export class MissionActor {
     let p = rows;
     let source = "legacy row tables";
     const watermark = this.events.watermark(runId);
-    if (this.events instanceof RawTreeEventLog && watermark > 0) {
+    if (this.opts.storage && watermark > 0) {
+      p = await this.opts.storage.restore(runId, watermark);
+      p.metrics = rows.metrics;
+      p.rows_loaded = rows.rows_loaded;
+      source = `${this.opts.storage.label} events through revision ${watermark}`;
+    } else if (this.events instanceof RawTreeEventLog && watermark > 0) {
       // Canonical restore: latest valid checkpoint ≤ watermark + contiguous ordered events. Gaps/conflicts throw (block).
       const r = await restoreFromEvents(this.client, runId, { watermark });
       p = r.projection;
@@ -373,16 +386,19 @@ export class MissionActor {
       const drift = (["commitments", "receipts", "plan_steps", "facts"] as const).filter((t) => Object.keys(p[t]).length !== Object.keys(rows[t]).length);
       if (drift.length) this.log(`restore: row mirror differs from canonical events for ${drift.join(",")} (events win)`, m?.arm, runId);
     }
-    const n = source.startsWith("mission_events") ? this.events.watermark(runId) : totalRows(p);
+    const canonical = !!this.opts.storage || source.startsWith("mission_events");
+    const n = canonical ? this.events.watermark(runId) : totalRows(p);
     if (m) p.mission = structuredClone(m.meta);
     this.cache.set(runId, p);
     this.revs.set(runId, Math.max(this.revs.get(runId) ?? 0, p.rev));
-    if (purpose === "verdict") this.log(`verdict check: re-read ${n} rows of ${runId} from RawTree`, arm, runId);
-    else this.log(`control cache invalidated; RESTORING FROM RAWTREE… ${n} ${source.startsWith("mission_events") ? "events" : "rows"} · epoch ${p.epoch + 1} · ${source}`, arm, runId);
+    const storageLabel = this.opts.storage?.label ?? "RawTree";
+    if (purpose === "verdict") this.log(`verdict check: re-read ${n} rows of ${runId} from ${storageLabel}`, arm, runId);
+    else this.log(`control cache invalidated; RESTORING FROM ${storageLabel.toUpperCase()}… ${n} ${canonical ? "events" : "rows"} · epoch ${p.epoch + 1} · ${source}`, arm, runId);
     return { projection: p, rows_loaded: p.rows_loaded, total_rows: n };
   }
 
   async intentVisible(runId: string, actionKey: string): Promise<number> {
+    if (this.opts.storage) return this.opts.storage.intentVisible(runId, actionKey);
     const r = await waitForRow(this.client, "commitments", runId, (row) => row.action_key === actionKey && row.status === "intent", { deadlineMs: 10_000, intervalMs: 200 });
     return r.visible_ms;
   }
@@ -701,7 +717,21 @@ export class MissionActor {
 
   // ---------------------------------------------------------------- supervisor
   /** Error message if any arm still has a live child (start would throw), else null. */
+  private startInFlight = false;
+
+  /**
+   * Reserve the legacy demo start synchronously (before any await), so two concurrent "plan"/"/demo/start" requests
+   * (a transport retry, a double click) can never both reset the world and create a second mission per arm.
+   */
+  reserveStart(arms: Arm[]): { release: () => void } | { blocker: string } {
+    const blocker = this.startBlocker(arms);
+    if (blocker) return { blocker };
+    this.startInFlight = true;
+    return { release: () => { this.startInFlight = false; } };
+  }
+
   startBlocker(arms: Arm[]): string | null {
+    if (this.startInFlight) return "a start is already in progress";
     for (const arm of arms) {
       const prev = this.missions[arm];
       if (prev && this.childActive(prev)) return `${arm} mission ${prev.run_id} still has a live child pid ${prev.pid}`;
@@ -711,8 +741,14 @@ export class MissionActor {
 
   /** Legacy demo start: create + (arm after_desk_commit) + resume per arm, through the same lifecycle. */
   async start(arms: Arm[], opts: { crash: boolean; statusUrl: string }): Promise<Mission[]> {
-    const blocker = this.startBlocker(arms);
-    if (blocker) throw new Error(blocker);
+    const res = this.reserveStart(arms);
+    if ("blocker" in res) throw new Error(res.blocker);
+    try { return await this.startReserved(arms, opts); } finally { res.release(); }
+  }
+
+  /** Caller already holds reserveStart(); still refuses an arm whose child is live. */
+  async startReserved(arms: Arm[], opts: { crash: boolean; statusUrl: string }): Promise<Mission[]> {
+    for (const arm of arms) { const prev = this.missions[arm]; if (prev && this.childActive(prev)) throw new Error(`${arm} mission ${prev.run_id} still has a live child pid ${prev.pid}`); }
     const out: Mission[] = [];
     for (const arm of arms) {
       const tag = randomBytes(6).toString("hex");
@@ -747,8 +783,8 @@ export class MissionActor {
     const env = buildRunnerEnv(this.cfg, {
       DR_RUN_ID: m.run_id, DR_EPOCH: m.generation, DR_ARM: m.arm === "naive" ? "naive" : "dr", DR_CRASH_AFTER: crash ?? "",
       DR_CONTROL_URL: this.controlUrl, DR_RUNNER_TOKEN: m.token,
-    });
-    const args = ["--import", "tsx", this.opts.runnerMain ?? RUNNER_MAIN, `--status-url=${m.statusUrl}`, `--sim-clock=${o.simClock}`];
+    }, this.opts.localMode ? { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, DR_DEMO_MODE: "local" } : process.env);
+    const args = [...(this.opts.localMode ? ["--import", "./scripts/local-network-guard.mjs"] : []), "--import", "tsx", this.opts.runnerMain ?? RUNNER_MAIN, `--status-url=${m.statusUrl}`, `--sim-clock=${o.simClock}`];
     if (m.arm === "naive") args.push("--resume=transcript", `--transcript=${m.transcriptPath}`);
     const child = spawn(process.execPath, args, { cwd: REPO_ROOT, env, stdio: ["ignore", "pipe", "pipe"] });
     m.child = child;

@@ -3,8 +3,8 @@
 //   kill / crash → SIGKILL held children · close site a → operator world edit · resume → stream until verdicts + scorecard
 //   reset → desk world back to v1 (start also resets) · details → raw technical log · anything else → status markdown
 // Narration: 🔵 Dead Reckoning, 🟠 Ordinary agent (the transcript-resume baseline). See narrator.ts.
-import { decodeValue, type AgUiMissionPort, type Arm, type SseEnvelope } from "@dr/shared";
-import type { MissionActor } from "./actor.ts";
+import { HOLD_LINE_PREFIX, decodeValue, type AgUiMissionPort, type Arm, type SseEnvelope } from "@dr/shared";
+import type { Mission, MissionActor } from "./actor.ts";
 import type { DemoOps } from "./server.ts";
 import { ARMS, Narrator, scorecard, who, type ArmResult } from "./narrator.ts";
 
@@ -88,6 +88,23 @@ const MISSION_HEADER = [
   "🌐 Real web: Dead Reckoning also reads the real Angel Island ferry schedule and park notices through Nimble. The booking desk and the campsite closure below are simulated.",
 ].join("\n");
 
+/** A stream finishing does not prove that a booking committed or that a worker reached the hold. */
+function startObservation(missions: Mission[]): string {
+  if (missions.length && missions.every((m) => m.state === "holding" && m.holdLine?.startsWith(HOLD_LINE_PREFIX))) {
+    const subject = missions.length === 2 ? "Both agents have" : `${who(missions[0]!.arm)} has`;
+    return `${subject} committed the simulated ferry booking and paused **before recording the receipt**. Say **kill** to crash ${missions.length === 1 ? "the worker" : "them"}.`;
+  }
+  const observed = missions.map((m) => {
+    if (m.verdict) return `${who(m.arm)} **${m.verdict.verdict}**: ${m.verdict.reason}`;
+    if (m.state === "holding") return `${who(m.arm)} is paused at a test boundary.`;
+    if (m.state === "failed") return `${who(m.arm)} worker failed. Ask for **details** to inspect the error.`;
+    if (m.state === "killed") return `${who(m.arm)} worker was killed. Ask for **status** before resuming.`;
+    if (m.state === "done") return `${who(m.arm)} worker exited; no terminal verdict has been reported.`;
+    return `${who(m.arm)} is ${m.state}. Ask for **status** to check progress.`;
+  });
+  return observed.join("\n\n") || "No worker was started.";
+}
+
 export function createMissionPort(actor: MissionActor, ops: DemoOps): AgUiMissionPort {
   return {
     async *handle(text: string) {
@@ -126,14 +143,17 @@ export function createMissionPort(actor: MissionActor, ops: DemoOps): AgUiMissio
       if (/start|plan|trip|angel/.test(t)) {
         if (!ops.enabled) { yield "Demo controls are disabled."; return; }
         const arms: Arm[] = /\bdr only\b/.test(t) ? ["dr"] : ["dr", "naive"];
-        const blocker = actor.startBlocker(arms);
-        if (blocker) { yield `Cannot start: ${blocker}. Say **kill all** first, or wait for the verdicts.`; return; }
-        // Every take starts from the v1 world (Site A open) so the later "close site A" edit is a real change.
-        await ops.reset();
-        const ms = await actor.start(arms, { crash: !/no crash/.test(t), statusUrl: await ops.statusUrl() });
+        const res = actor.reserveStart(arms);
+        if ("blocker" in res) { yield `Cannot start: ${res.blocker}. Say **kill all** first, or wait for the verdicts.`; return; }
+        let ms;
+        try {
+          // Every take starts from the v1 world (Site A open) so the later "close site A" edit is a real change.
+          await ops.reset();
+          ms = await actor.startReserved(arms, { crash: !/no crash/.test(t), statusUrl: await ops.statusUrl() });
+        } finally { res.release(); }
         yield MISSION_HEADER;
         yield* streamUntil(actor, () => ms.every((m) => m.state !== "running"), 180_000);
-        yield "\n\n**Both agents have paid for the ferry and are paused before recording it.** This is the most dangerous moment to crash: a restarted agent can't tell whether the payment went through. Say **kill** to crash them.";
+        yield `\n\n${startObservation(ms)}`;
         return;
       }
       yield statusMarkdown(actor);

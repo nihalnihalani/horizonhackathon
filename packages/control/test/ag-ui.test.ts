@@ -163,3 +163,23 @@ describe("AG-UI bearer gate", () => {
     expect(bearerMatches("Bearer ", "")).toBe(false);
   });
 });
+
+describe("thread-title runs from the Intelligence runtime", () => {
+  it("answers with a JSON title and never calls the mission port", async () => {
+    const { runEvents } = await import("../src/ag-ui/handler");
+    let called = 0;
+    const port = { async *handle() { called++; yield "should not run"; } };
+    const input = {
+      threadId: "t-title", runId: "r-title", tools: [], context: [], state: {}, forwardedProps: {},
+      messages: [
+        { id: "s1", role: "system", content: "You generate short, specific conversation titles.\nReturn JSON only" },
+        { id: "u1", role: "user", content: "user: plan my Angel Island trip" },
+      ],
+    };
+    const out: { type: string; delta?: string }[] = [];
+    for await (const e of runEvents(port as never, input as never)) out.push(e as never);
+    expect(called).toBe(0);
+    expect(out.map((e) => e.type)).toEqual(["RUN_STARTED", "TEXT_MESSAGE_START", "TEXT_MESSAGE_CONTENT", "TEXT_MESSAGE_END", "RUN_FINISHED"]);
+    expect(JSON.parse(out[2]!.delta!)).toEqual({ title: "Dead Reckoning mission" });
+  });
+});
