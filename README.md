@@ -16,7 +16,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?style=flat-square&logo=node.js&logoColor=white)
 ![Bun](https://img.shields.io/badge/Bun-console-000000?style=flat-square&logo=bun)
-![Tests](https://img.shields.io/badge/tests-232%20unit%20%C2%B7%2019%20real--SIGKILL%20recovery%20%C2%B7%2046%20console%20%C2%B7%2027%20bench-16a34a?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-274%20unit%20%C2%B7%2019%20real--SIGKILL%20recovery%20%C2%B7%2046%20console%20%C2%B7%2027%20bench-16a34a?style=flat-square)
 
 <img src="docs/assets/05-proof-board.jpg" alt="Proof board: Dead Reckoning VALID with the ferry receipt recovered from the desk, the transcript agent BLOCKED" width="900">
 
@@ -122,9 +122,22 @@ flowchart LR
 | No accessible site left (F3b) | **BLOCKED `no_accessible_site_available`**; no campsite booked, because a correct refusal beats a wrong success |
 | Planner input per step | DR **528 → 619 → 440 → 457** tokens (bounded) vs transcript baseline **485 → 551 → 637 → 687 → 773** (grows every step) |
 | 12-round memory trace (M1, live Liquid + OpenAI) | A Liquid-authored eviction changed the next prompt, and pins and recall survived; DR peak 3,966 vs `checkpoint-summary-v1` 5,533 tokens ([results](docs/results/m1-paired-20260925-947564/summary.md)) |
-| Tests | 232 unit, 19 real-SIGKILL recovery, 27 bench, 46 console (`./run.sh test`); the acceptance matrix is in [VALIDATION_AND_DEMO.md](docs/implementation/VALIDATION_AND_DEMO.md) |
+| Tests | 274 unit, 19 real-SIGKILL recovery, 27 bench, 46 console (`./run.sh test`); the acceptance matrix is in [VALIDATION_AND_DEMO.md](docs/implementation/VALIDATION_AND_DEMO.md) |
 
 These are single runs, not statistics. The baseline keeps the same desk idempotency and safety checks: it is a fair transcript-resume ablation, not a straw man.
+
+## Real ferry preparation pilot
+
+Beyond the simulated demo, `npm run demo:product` (<http://127.0.0.1:4430>) prepares a **real** booking for one supported departure: Tiburon → Angel Island, 9 Oct 2026, 10:00 AM.
+
+1. **Check.** Nimble reads the operator's official schedule and FAQ. Code confirms that the departure exists and has no date-specific exception, then checks your budget.
+2. **Prefill.** It opens the operator's **real FareHarbor form** with the departure and adult count already selected.
+3. **You finish it.** You review the live fare and terms and complete checkout yourself.
+4. **Saved.** Each preparation and its source evidence (Nimble request ID, content hash) is kept and survives a restart.
+
+The app never adds to a cart, accepts terms or pays. The fare shown is a timestamped earlier observation, not a live quote. The guide is in [PRODUCT_DEMO_GUIDE.md](docs/implementation/PRODUCT_DEMO_GUIDE.md).
+
+A key-free rehearsal of the crash-recovery demo is also available: `npm run demo:local` (<http://127.0.0.1:4420>). It uses rule-based stand-ins, labelled `LOCAL rule`, and makes zero hosted calls. It is not evidence of the live sponsor path.
 
 ## Run it
 
